@@ -1,0 +1,29 @@
+/* Tüm sayfayı saran alan */
+.page {
+  min-height: 100vh;
+  background-color: #003b73; /* koyu lacivert */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* İçerik genişliği */
+.main {
+  width: 100%;
+  max-width: 1200px;
+  padding: 24px 16px 40px;
+  display: grid;
+  grid-template-columns: 1.2fr 2fr; /* sol: gündem, sağ: kutular */
+  gap: 24px;
+  box-sizing: border-box;
+}
+
+/* Sol panel (GÜNDEM) */
+.agendaSection {
+  display: flex;
+}
+
+/* Sağ panel (Kategori Board) */
+.categorySection {
+  display: flex;
+}

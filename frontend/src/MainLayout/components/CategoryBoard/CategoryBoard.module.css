@@ -1,0 +1,49 @@
+.board {
+  width: 100%;
+  display: grid;
+  height: 100%;
+  gap: 16px;
+
+  /* Canva’daki gibi mozaik düzen */
+  grid-template-areas:
+    "ders       iliski     grup"
+    "ders       eglence    yurt"
+    "burs       kultur     yurt"
+    "spor       daha       yurt";
+    
+  grid-template-columns: 1fr 1fr 1fr;   /* 3 kolon */
+  grid-auto-rows: 130px;               /* yükseklikler */
+}
+
+/* Ortak kart stili */
+.card {
+  border-radius: 20px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: white;
+  font-size: 15px;
+  text-align: center;
+}
+
+/* Renkler */
+.pink {
+  background-color: #ff74ad;
+}
+
+.blue {
+  background-color: #6ec6ff;
+}
+
+/* Daha büyük özel kutular: */
+.board > [style*="yurt"] {
+  /* Konaklama & Yurt Hayatı (dik uzun blok) */
+  grid-row: span 3;
+}
+
+.board > [style*="ders"] {
+  /* Gündemin sağındaki büyük mavi kutu */
+  grid-row: span 2;
+}
