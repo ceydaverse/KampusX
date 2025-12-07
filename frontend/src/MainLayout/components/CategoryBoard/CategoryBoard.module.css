@@ -2,7 +2,7 @@
   width: 100%;
   display: grid;
   height: 100%;
-  gap: 16px;
+  gap: 1px;
 
   /* Canva’daki gibi mozaik düzen */
   grid-template-areas:
