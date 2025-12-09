@@ -1,0 +1,89 @@
+/* Category Board Styles */
+
+.category-board {
+  padding: 24px 0;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: auto auto auto auto;
+  gap: 16px;
+  grid-template-areas:
+    "academic social group  dorm"
+    "academic fun    fun    dorm"
+    "career   career culture dorm"
+    "career   career sport  more";
+}
+
+/* Board item base styles */
+.board-item {
+  border-radius: 24px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-weight: 600;
+  color: #fff;
+  min-height: 120px;
+  box-sizing: border-box;
+}
+
+/* Colors */
+.board-item--blue {
+  background-color: #6ec1ff;
+}
+
+.board-item--pink {
+  background-color: #ff76b9;
+}
+
+/* Grid areas */
+.board-item--academic {
+  grid-area: academic;
+  min-height: 160px;
+}
+
+.board-item--fun {
+  grid-area: fun;
+  min-height: 160px;
+}
+
+.board-item--career {
+  grid-area: career;
+}
+
+.board-item--social {
+  grid-area: social;
+}
+
+.board-item--group {
+  grid-area: group;
+}
+
+.board-item--culture {
+  grid-area: culture;
+}
+
+.board-item--sport {
+  grid-area: sport;
+}
+
+.board-item--dorm {
+  grid-area: dorm;
+  min-height: 100%;
+}
+
+.board-item--more {
+  grid-area: more;
+}
+
+/* Diğer kategoriler için başlık */
+.board-item h4 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  color: #fff;
+}

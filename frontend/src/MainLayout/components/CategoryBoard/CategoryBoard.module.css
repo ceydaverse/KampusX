@@ -1,49 +1,57 @@
 .board {
   width: 100%;
   display: grid;
-  height: 100%;
-  gap: 1px;
-
-  /* Canva’daki gibi mozaik düzen */
+  margin-left: 0;
+  padding-left: 0;
+  gap: 14px;
+  align-items: stretch;
+  grid-template-columns: 1.2fr 1.2fr 1.1fr 1.1fr;
+  grid-auto-rows: 120px;
   grid-template-areas:
-    "ders       iliski     grup"
-    "ders       eglence    yurt"
-    "burs       kultur     yurt"
-    "spor       daha       yurt";
-    
-  grid-template-columns: 1fr 1fr 1fr;   /* 3 kolon */
-  grid-auto-rows: 130px;               /* yükseklikler */
+    "ders   iliski grup    yurt"
+    "ders   iliski grup    yurt"
+    "eglence burs   kultur yurt"
+    "eglence burs   kultur yurt"
+    "spor   daha   spor    yurt";
 }
 
-/* Ortak kart stili */
-.card {
-  border-radius: 20px;
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  color: white;
-  font-size: 15px;
-  text-align: center;
+/* Her kartın grid'teki yeri */
+.ders {
+  grid-area: ders;
+  grid-column: span 1;
+  width: auto;
 }
 
-/* Renkler */
-.pink {
-  background-color: #ff74ad;
+.iliski {
+  grid-area: iliski;
 }
 
-.blue {
-  background-color: #6ec6ff;
+.grup {
+  grid-area: grup;
 }
 
-/* Daha büyük özel kutular: */
-.board > [style*="yurt"] {
-  /* Konaklama & Yurt Hayatı (dik uzun blok) */
-  grid-row: span 3;
+.yurt {
+  grid-area: yurt;
 }
 
-.board > [style*="ders"] {
-  /* Gündemin sağındaki büyük mavi kutu */
-  grid-row: span 2;
+.eglence {
+  grid-area: eglence;
+  grid-column: span 1;
+  width: auto;
+}
+
+.kultur {
+  grid-area: kultur;
+}
+
+.burs {
+  grid-area: burs;
+}
+
+.spor {
+  grid-area: spor;
+}
+
+.daha {
+  grid-area: daha;
 }

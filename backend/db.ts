@@ -1,4 +1,4 @@
-const sql = require("mssql");
+import sql from "mssql";
 
 const config = {
   user: process.env.DB_USER,
@@ -11,7 +11,7 @@ const config = {
   },
 };
 
-async function connectDB() {
+export async function connectDB() {
   try {
     await sql.connect(config);
     console.log("MSSQL bağlantısı başarılı");
@@ -20,5 +20,5 @@ async function connectDB() {
   }
 }
 
-module.exports = { connectDB, sql };
+export { sql };
 

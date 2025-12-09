@@ -1,8 +1,7 @@
 .header {
   width: 100%;
-  max-width: 1200px;
   height: 72px;
-  margin-top: 16px;
+  margin-top: 0;
   background-color: #ffffff;
   border-radius: 18px;
   display: grid;
