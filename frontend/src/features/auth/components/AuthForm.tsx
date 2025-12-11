@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";   // ✅ eklendi
 import "../styles/auth.css";
 
 interface AuthFormProps {
@@ -36,6 +37,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const navigate = useNavigate();                    // ✅ eklendi
   const isRegister = activeTab === "register";
 
   // "Ad Soyad"ı ikiye bölmek için helper
@@ -105,8 +107,12 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
 
         if (response.data.success) {
           setSuccessMessage("Kayıt başarılı! Artık giriş yapabilirsiniz.");
-          // İstersen otomatik login tabına al
+
+          // ✅ Login tabına geç
           onTabChange?.("login");
+
+          // ✅ Popup göster
+          alert("Kayıt başarılı! Şimdi email ve şifrenizle giriş yapabilirsiniz.");
         } else {
           setError(response.data.message || "Kayıt başarısız.");
         }
@@ -122,11 +128,18 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
         });
 
         if (response.data.success && response.data.user) {
-          setSuccessMessage(
-            `Hoş geldin ${response.data.user.ad} ${response.data.user.soyad}!`
-          );
-          // Burada Redux/Context'e user kaydedip yönlendirme yapabilirsin
-          // ör: navigate('/');
+          const user = response.data.user;
+
+          setSuccessMessage(`Hoş geldin ${user.ad} ${user.soyad}!`);
+
+          // ✅ İstersen localStorage'da sakla
+          localStorage.setItem("kampusxUser", JSON.stringify(user));
+
+          // ✅ Popup göster
+          alert(`Hoş geldin ${user.ad} ${user.soyad}!`);
+
+          // ✅ Anasayfaya yönlendir (route'un neyse ona göre değiştir)
+          navigate("/"); // örn: "/main" veya "/home" yapabilirsin
         } else {
           setError(response.data.message || "Giriş başarısız.");
         }
@@ -274,7 +287,11 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
       <div className="auth-form-actions">
         {isRegister ? (
           <>
-            <button type="submit" className="btn-primary-pink" disabled={loading}>
+            <button
+              type="submit"
+              className="btn-primary-pink"
+              disabled={loading}
+            >
               {loading ? "İşlem yapılıyor..." : "Hesap Oluştur"}
             </button>
             <button
