@@ -9,7 +9,7 @@ const sqlConfig: sql.config = {
   password: process.env.DB_PASSWORD, // Örn: harikaceren
   database: process.env.DB_NAME,     // Örn: KampusX
   server: process.env.DB_SERVER || 'localhost', 
-  port: 1433,                        // MSSQL'in varsayılan portu
+  port:1433,                        // MSSQL'in varsayılan portu
   options: {
     encrypt: false,                  // Lokal ortamda false olmalı
     trustServerCertificate: true     // SSL hatalarına karşı true olmalı

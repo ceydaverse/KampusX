@@ -1,9 +1,20 @@
 import React, { useState } from "react";
+import axios from "axios";
 import "../styles/auth.css";
 
 interface AuthFormProps {
   activeTab: "login" | "register";
   onTabChange?: (tab: "login" | "register") => void;
+}
+
+interface ApiUser {
+  id: number;
+  ad: string;
+  soyad: string;
+  email: string;
+  universite?: string | null;
+  bolum?: string | null;
+  cinsiyet?: string | null;
 }
 
 /**
@@ -12,7 +23,6 @@ interface AuthFormProps {
  * activeTab prop'una göre login veya register formunu gösterir
  */
 const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
-  // Form state'leri
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -21,6 +31,23 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
     rememberMe: false,
     acceptTerms: false,
   });
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const isRegister = activeTab === "register";
+
+  // "Ad Soyad"ı ikiye bölmek için helper
+  const splitName = (name: string): { ad: string; soyad: string } => {
+    const parts = name.trim().split(" ");
+    if (parts.length === 1) {
+      return { ad: parts[0], soyad: "" };
+    }
+    const ad = parts[0];
+    const soyad = parts.slice(1).join(" ");
+    return { ad, soyad };
+  };
 
   // Input değişikliklerini handle eden fonksiyon
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -31,12 +58,87 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
     }));
   };
 
-  // Form submit handler
-  const handleSubmit = (e: React.FormEvent) => {
+  // Form submit handler (BURADA backend çağrısı var)
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    console.log("Active Tab:", activeTab);
-    console.log("Form Data:", formData);
-    // Backend çağrısı burada yapılacak (şimdilik sadece console.log)
+    setError(null);
+    setSuccessMessage(null);
+
+    // Register modundaysak ekstra kontroller
+    if (isRegister) {
+      if (!formData.acceptTerms) {
+        setError("Kullanım koşullarını kabul etmelisiniz.");
+        return;
+      }
+      if (formData.password !== formData.confirmPassword) {
+        setError("Şifre ve şifre tekrarı aynı olmalıdır.");
+        return;
+      }
+      if (!formData.fullName.trim()) {
+        setError("Ad Soyad alanı boş olamaz.");
+        return;
+      }
+    }
+
+    setLoading(true);
+
+    try {
+      if (isRegister) {
+        // ----------- KAYIT OL -----------
+        const { ad, soyad } = splitName(formData.fullName);
+
+        const response = await axios.post<{
+          success: boolean;
+          user?: ApiUser;
+          message?: string;
+        }>("http://localhost:5000/api/auth/register", {
+          ad,
+          soyad,
+          email: formData.email,
+          password: formData.password,
+          // opsiyonel alanları şimdilik null gönderiyoruz
+          universite: null,
+          bolum: null,
+          cinsiyet: null,
+          dogum_yili: null,
+        });
+
+        if (response.data.success) {
+          setSuccessMessage("Kayıt başarılı! Artık giriş yapabilirsiniz.");
+          // İstersen otomatik login tabına al
+          onTabChange?.("login");
+        } else {
+          setError(response.data.message || "Kayıt başarısız.");
+        }
+      } else {
+        // ----------- GİRİŞ YAP -----------
+        const response = await axios.post<{
+          success: boolean;
+          user?: ApiUser;
+          message?: string;
+        }>("http://localhost:5000/api/auth/login", {
+          email: formData.email,
+          password: formData.password,
+        });
+
+        if (response.data.success && response.data.user) {
+          setSuccessMessage(
+            `Hoş geldin ${response.data.user.ad} ${response.data.user.soyad}!`
+          );
+          // Burada Redux/Context'e user kaydedip yönlendirme yapabilirsin
+          // ör: navigate('/');
+        } else {
+          setError(response.data.message || "Giriş başarısız.");
+        }
+      }
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        "Sunucuya bağlanırken bir hata oluştu.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Tab değiştiğinde form'u sıfırla
@@ -49,9 +151,9 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
       rememberMe: false,
       acceptTerms: false,
     });
+    setError(null);
+    setSuccessMessage(null);
   }, [activeTab]);
-
-  const isRegister = activeTab === "register";
 
   return (
     <form className="auth-form" onSubmit={handleSubmit}>
@@ -111,7 +213,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
           )}
         </div>
 
-        {/* Sağ taraf: Sosyal login butonları */}
+        {/* Sağ taraf: Sosyal login butonları (şimdilik sadece görüntü) */}
         <div className="auth-social-buttons">
           <button type="button" className="social-btn social-btn--google">
             G
@@ -128,6 +230,12 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
         </div>
       </div>
 
+      {/* Hata / başarı mesajları */}
+      {error && <div className="auth-alert auth-alert--error">{error}</div>}
+      {successMessage && (
+        <div className="auth-alert auth-alert--success">{successMessage}</div>
+      )}
+
       {/* Checkbox alanı */}
       <div className="auth-checkbox-group">
         {isRegister ? (
@@ -139,7 +247,10 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
                 checked={formData.acceptTerms}
                 onChange={handleChange}
               />
-              <span>Kullanım Koşulları ve Gizlilik Politikasını okudum ve kabul ediyorum.</span>
+              <span>
+                Kullanım Koşulları ve Gizlilik Politikasını okudum ve kabul
+                ediyorum.
+              </span>
             </label>
             <p className="auth-help-text">Zaten hesabım var mı?</p>
           </>
@@ -163,11 +274,11 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
       <div className="auth-form-actions">
         {isRegister ? (
           <>
-            <button type="submit" className="btn-primary-pink">
-              Hesap Oluştur
+            <button type="submit" className="btn-primary-pink" disabled={loading}>
+              {loading ? "İşlem yapılıyor..." : "Hesap Oluştur"}
             </button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               className="btn-outline-blue"
               onClick={() => onTabChange?.("login")}
             >
@@ -176,15 +287,19 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
           </>
         ) : (
           <>
-            <button 
-              type="button" 
+            <button
+              type="button"
               className="btn-primary-pink"
               onClick={() => onTabChange?.("register")}
             >
               Kayıt Ol
             </button>
-            <button type="submit" className="btn-outline-blue">
-              Giriş Yap
+            <button
+              type="submit"
+              className="btn-outline-blue"
+              disabled={loading}
+            >
+              {loading ? "İşlem yapılıyor..." : "Giriş Yap"}
             </button>
           </>
         )}
@@ -194,4 +309,3 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
 };
 
 export default AuthForm;
-
