@@ -1,24 +1,35 @@
-import sql from "mssql";
+import sql from 'mssql';
+import dotenv from 'dotenv';
 
-const config = {
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  server: process.env.DB_HOST,
-  database: process.env.DB_NAME,
+dotenv.config();
+
+// SQL Server bağlantı ayarları
+const sqlConfig: sql.config = {
+  user: process.env.DB_USER,         // Örn: sa
+  password: process.env.DB_PASSWORD, // Örn: harikaceren
+  database: process.env.DB_NAME,     // Örn: KampusX
+  server: process.env.DB_SERVER || 'localhost', 
+  port: 1433,                        // MSSQL'in varsayılan portu
   options: {
-    encrypt: false,
-    trustServerCertificate: true,
-  },
+    encrypt: false,                  // Lokal ortamda false olmalı
+    trustServerCertificate: true     // SSL hatalarına karşı true olmalı
+  }
 };
 
-export async function connectDB() {
+let pool: sql.ConnectionPool | null = null;
+
+// Bağlantı havuzu oluştur veya mevcut olanı döndür
+export async function getPool(): Promise<sql.ConnectionPool> {
+  if (pool) return pool;
+
   try {
-    await sql.connect(config);
-    console.log("MSSQL bağlantısı başarılı");
+    pool = await sql.connect(sqlConfig);
+    console.log('MSSQL bağlantısı başarılı 🚀');
+    return pool;
   } catch (err) {
-    console.error("Veritabanı bağlantı hatası:", err);
+    console.error('MSSQL bağlantı hatası ❌:', err);
+    throw err;
   }
 }
 
 export { sql };
-
