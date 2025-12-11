@@ -7,16 +7,25 @@ import { getPool, sql } from './db';
 
 dotenv.config();
 
-const app = express();
+//const app = express();
 
 // Frontend portuna CORS izni
-app.use(
-  cors({
-    origin: 'http://localhost:5174',
-  })
-);
+//app.use(
+  //cors({
+   // origin: 'http://localhost:5174',
+ // })
+//);//
+
+//app.use(express.json());//
+const app = express();
+
+// ⭐ Geliştirme ortamında tüm origin'lere izin ver
+app.use(cors());
 
 app.use(express.json());
+
+
+
 
 const PORT = Number(process.env.PORT) || 5000;
 
