@@ -3,9 +3,7 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import { getPool, sql } from './db';
-
-// ⚠️ Bildirim route'u require ile import ediyoruz
-const bildirimRoutes = require('./routes/bildirim.routes').default;
+import bildirimRoutes from './routes/bildirim.routes';
 
 dotenv.config();
 
@@ -14,8 +12,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔔 Route'u bağla
+// 🔹 Bildirim route'u
 app.use('/api/bildirimler', bildirimRoutes);
+console.log('📢 Bildirim route yüklendi');  // Artık hata vermeyecek, sadece log gösterecek
 
 const PORT = process.env.PORT || 5000;
 
@@ -24,7 +23,7 @@ app.get('/', (req: Request, res: Response) => {
   res.send('Backend çalışıyor 🚀');
 });
 
-// 🔹 MSSQL TEST ENDPOINTİ
+// MSSQL test endpoint
 app.get('/api/test-db', async (req: Request, res: Response) => {
   try {
     const pool = await getPool();
@@ -36,32 +35,24 @@ app.get('/api/test-db', async (req: Request, res: Response) => {
   }
 });
 
-// 🔹 LOGIN ENDPOINTİ
+// LOGIN endpoint
 app.post('/api/auth/login', async (req: Request, res: Response) => {
   const { email, password } = req.body;
-
   if (!email || !password) {
     return res.status(400).json({ message: 'Email ve şifre zorunludur.' });
   }
 
   try {
     const pool = await getPool();
-
     const result = await pool.request()
       .input('email', sql.VarChar(150), email)
-      .query(`
-        SELECT TOP 1 *
-        FROM Kullanicilar
-        WHERE email = @email
-          AND silindi = 0
-      `);
+      .query(`SELECT TOP 1 * FROM Kullanicilar WHERE email = @email AND silindi = 0`);
 
     if (result.recordset.length === 0) {
       return res.status(401).json({ message: 'Email veya şifre hatalı.' });
     }
 
     const user = result.recordset[0];
-
     const isMatch = await bcrypt.compare(password, user.sifre_hash.trim());
 
     if (!isMatch) {
@@ -88,5 +79,4 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
 
 app.listen(PORT, () => {
   console.log(`KampusX backend http://localhost:${PORT} üzerinde çalışıyor`);
-  console.log('📢 Bildirim route yüklendi'); // Artık bu görünecek
 });
