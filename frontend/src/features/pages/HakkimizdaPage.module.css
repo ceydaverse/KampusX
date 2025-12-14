@@ -1,0 +1,85 @@
+.page {
+  min-height: 100vh;
+  background-color: #00447f;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+}
+
+.content {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 16px 56px;
+}
+
+.hero {
+  margin-bottom: 28px;
+}
+
+.title {
+  font-size: 2.2rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  font-size: 0.98rem;
+  line-height: 1.7;
+  max-width: 800px;
+  opacity: 0.95;
+}
+
+.section {
+  margin-top: 24px;
+}
+
+.sectionTitle {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.sectionText {
+  font-size: 0.96rem;
+  line-height: 1.7;
+  opacity: 0.95;
+}
+
+/* Kartlı bölüm */
+.sectionGrid {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.card {
+  background-color: rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 16px 18px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.card h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.card p {
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+/* Footer en altta kalsın */
+.page > :last-child {
+  margin-top: auto;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .sectionGrid {
+    grid-template-columns: 1fr;
+  }
+}
+

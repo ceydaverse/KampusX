@@ -11,26 +11,27 @@
 /* İçerik genişliği */
 .main {
   display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 8px;
-  padding: 0 0 40px;
-  justify-content: flex-start;
-  align-items: flex-start;
+  grid-template-columns: 220px 1fr;
+  gap: 16px;
+  padding: 0 16px 40px;
+  align-items: stretch;
   box-sizing: border-box;
 }
 
 /* Sol panel (GÜNDEM) */
 .agendaSection {
-  margin-left: 16px;
-  margin-right: 8px;
   padding: 0;
-  width: fit-content;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Sağ panel (Kategori Board) */
 .categorySection {
-  display: block;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   margin: 0;
   padding: 0;
+  align-self: stretch;
 }

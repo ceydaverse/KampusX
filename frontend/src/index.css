@@ -35,6 +35,9 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: radial-gradient(circle at top left, #051024, #010309);
+  color: #ffffff;
 }
 
 h1 {
@@ -72,4 +75,23 @@ button:focus-visible {
   button {
     background-color: #f9f9f9;
   }
+}
+
+/* === Global modern scrollbar === */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.55);
 }

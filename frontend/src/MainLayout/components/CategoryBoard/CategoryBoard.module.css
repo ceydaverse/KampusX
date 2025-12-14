@@ -1,3 +1,10 @@
+.categoryBoard {
+  padding: 24px 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
 .board {
   width: 100%;
   display: grid;
@@ -6,20 +13,18 @@
   gap: 14px;
   align-items: stretch;
   grid-template-columns: 1.2fr 1.2fr 1.1fr 1.1fr;
-  grid-auto-rows: 120px;
+  grid-auto-rows: minmax(140px, auto);
   grid-template-areas:
-    "ders   iliski grup    yurt"
-    "ders   iliski grup    yurt"
-    "eglence burs   kultur yurt"
-    "eglence burs   kultur yurt"
-    "spor   daha   spor    yurt";
+    "ders iliski grup yurt"
+    "ders eglence yemek yurt"
+    "ders burs   uni   daha";
+  padding-bottom: 24px;
+  flex: 1;
 }
 
 /* Her kartın grid'teki yeri */
 .ders {
   grid-area: ders;
-  grid-column: span 1;
-  width: auto;
 }
 
 .iliski {
@@ -36,22 +41,169 @@
 
 .eglence {
   grid-area: eglence;
-  grid-column: span 1;
-  width: auto;
 }
 
-.kultur {
-  grid-area: kultur;
+.yemek {
+  grid-area: yemek;
 }
 
 .burs {
   grid-area: burs;
 }
 
-.spor {
-  grid-area: spor;
+.uni {
+  grid-area: uni;
 }
 
 .daha {
   grid-area: daha;
+}
+
+/* ============================================
+   KATEGORİ ANİMASYONLARI VE EFEKTLER
+   ============================================ */
+
+/* 🎉 Eğlence – Gradient arka plan + pulse animasyonu */
+.themeFun {
+  background: linear-gradient(135deg, #ff76c7, #b16bff) !important;
+  color: white;
+  animation: funPulse 2s infinite ease-in-out;
+}
+
+@keyframes funPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ❤️ Sosyal – Kalp atışı animasyonu */
+.socialHeart {
+  animation: heartBeat 1.2s infinite;
+}
+
+@keyframes heartBeat {
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.15);
+  }
+  50% {
+    transform: scale(1);
+  }
+  75% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 💼 Kariyer – Altın progress bar */
+.careerProgressBar {
+  position: relative;
+}
+
+.careerProgressBar::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0%;
+  height: 4px;
+  background: gold;
+  animation: progressGrow 2s forwards;
+}
+
+@keyframes progressGrow {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+/* 💬 Sohbet – Yazıyor animasyonu */
+.typingIndicator {
+  position: relative;
+}
+
+/* İçerik kaldırıldı - daha sonra tasarlanacak */
+.typingIndicator::after {
+  content: "";
+  display: none;
+}
+
+/* 🏠 Konaklama – Grid arka plan */
+.housingCard {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 255, 255, 0.1) 10px,
+    rgba(255, 255, 255, 0.05) 10px,
+    rgba(255, 255, 255, 0.05) 20px
+  ) !important;
+}
+
+/* 🍕 Yemek – Hover brightness */
+.foodCard {
+  transition: filter 0.25s ease, transform 0.25s ease;
+}
+
+.foodCard:hover {
+  filter: brightness(1.25);
+  transform: scale(1.03);
+}
+
+/* 📰 Gündem – Başlık bandı */
+.newsHeaderBand {
+  border-top: 4px solid #ff5f5f;
+}
+
+/* ✨ Yeni – Highlight animasyonu */
+.newsItemNew {
+  animation: newGlow 1.7s infinite;
+}
+
+@keyframes newGlow {
+  0% {
+    box-shadow: 0 0 0px rgba(255, 230, 0, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(255, 230, 0, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 0px rgba(255, 230, 0, 0.5);
+  }
+}
+
+/* 🎯 Önerilen – Güçlü bounce hover efekti */
+.funCard {
+  transition: transform 0.3s ease;
+}
+
+.funCard:hover {
+  animation: bounce 0.6s ease;
+}
+
+@keyframes bounce {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.15);
+  }
+  60% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
 }

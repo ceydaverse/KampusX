@@ -1,14 +1,21 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import styles from "./AgendaPanel.module.css";
 
 const AgendaPanel: React.FC = () => {
   return (
-    <div className={styles.container}>
-      <h2 className={styles.title}>GÜNDEM</h2>
-      <p className={styles.placeholder}>
-        Kampüste olan biten her şey burada görünecek.
-      </p>
-    </div>
+    <aside className={styles.agendaPanel}>
+      <Link 
+        to="/kategori/gundem" 
+        className={styles.agendaCard}
+        style={{ textDecoration: "none", cursor: "pointer" }}
+      >
+        <h2 className={styles.agendaTitle}>GÜNDEM</h2>
+        <div className={styles.cardBody}>
+          {/* İçerik daha sonra tasarlanacak */}
+        </div>
+      </Link>
+    </aside>
   );
 };
 

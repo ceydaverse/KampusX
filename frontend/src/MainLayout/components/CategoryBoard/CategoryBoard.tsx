@@ -1,5 +1,7 @@
 import React from "react";
-import "./categoryboard.css";
+import { CategoryCard } from "./CategoryCard";
+import { launchFireworks } from "../../../shared/utils/fireworks";
+import styles from "./CategoryBoard.module.css";
 
 /**
  * CategoryBoard Component
@@ -7,53 +9,48 @@ import "./categoryboard.css";
  * Canva tasarımına uygun mozaik düzen
  */
 export const CategoryBoard: React.FC = () => {
+  const CATEGORY_EFFECT_CLASS: Record<string, string> = {
+    eglence: styles.themeFun,
+    iliski: styles.socialHeart,
+    burs: styles.careerProgressBar,
+    grup: styles.typingIndicator,
+    yurt: styles.housingCard,
+    yemek: styles.foodCard,
+    daha: styles.funCard,
+  };
+
+  const handleCategoryClick = (key: string) => {
+    if (key === "eglence") {
+      launchFireworks();
+    }
+  };
+
+  const categories = [
+    { id: "ders", title: "Ders & Akademik", color: "blue" as const, slug: "ders-akademi" },
+    { id: "iliski", title: "İlişkiler & Sosyal Yaşam", color: "blue" as const, slug: "iliskiler-sosyal-yasam" },
+    { id: "grup", title: "Grup Sohbetleri", color: "blue" as const, slug: "grup-sohbetleri" },
+    { id: "yurt", title: "Konaklama & Yurt Hayatı", color: "pink" as const, slug: "konaklama-yurt-hayati" },
+    { id: "eglence", title: "Eğlence", color: "pink" as const, slug: "eglence" },
+    { id: "yemek", title: "Yemek & Mekan Önerileri", color: "pink" as const, slug: "yemek-mekan-onerileri" },
+    { id: "burs", title: "Burslar & İş İlanları & Kariyer", color: "pink" as const, slug: "burs-is-ilanlari-kariyer" },
+    { id: "uni", title: "Üniversite & Şehir Hakkında", color: "pink" as const, slug: "universite-sehir-hakkinda" },
+    { id: "daha", title: "Ve daha fazlası", color: "pink" as const, slug: "ve-daha-fazlasi" },
+  ];
+
   return (
-    <div className="category-board">
-      <div className="board">
-        {/* Ders & Akademik */}
-        <div className="board-item board-item--academic board-item--blue">
-          <h4>Ders & Akademik</h4>
-        </div>
-
-        {/* İlişkiler & Sosyal Yaşam */}
-        <div className="board-item board-item--social board-item--blue">
-          <h4>İlişkiler & Sosyal Yaşam</h4>
-        </div>
-
-        {/* Grup Sohbetleri */}
-        <div className="board-item board-item--group board-item--blue">
-          <h4>Grup Sohbetleri</h4>
-        </div>
-
-        {/* Eğlence */}
-        <div className="board-item board-item--fun board-item--pink">
-          <h4>Eğlence</h4>
-        </div>
-
-        {/* Burslar & İş İlanları & Kariyer */}
-        <div className="board-item board-item--career board-item--pink">
-          <h4>Burslar & İş İlanları & Kariyer</h4>
-        </div>
-
-        {/* Kültür & Sanat */}
-        <div className="board-item board-item--culture board-item--pink">
-          <h4>Kültür & Sanat</h4>
-        </div>
-
-        {/* Spor & Aktivite */}
-        <div className="board-item board-item--sport board-item--pink">
-          <h4>Spor & Aktivite</h4>
-        </div>
-
-        {/* Konaklama & Yurt Hayatı */}
-        <div className="board-item board-item--dorm board-item--pink">
-          <h4>Konaklama & Yurt Hayatı</h4>
-        </div>
-
-        {/* Ve daha fazlası */}
-        <div className="board-item board-item--more board-item--pink">
-          <h4>Ve daha fazlası</h4>
-        </div>
+    <div className={styles.categoryBoard}>
+      <div className={styles.board}>
+        {categories.map((category) => (
+          <CategoryCard
+            key={category.id}
+            id={category.id}
+            title={category.title}
+            color={category.color}
+            slug={category.slug}
+            effectClass={CATEGORY_EFFECT_CLASS[category.id]}
+            onCategoryClick={handleCategoryClick}
+          />
+        ))}
       </div>
     </div>
   );

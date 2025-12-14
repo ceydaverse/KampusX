@@ -5,6 +5,7 @@ import styles from "./MainLayout.module.css";
 import Header from "./components/Header/Header";
 import AgendaPanel from "./components/AgendaPanel/AgendaPanel";
 import { CategoryBoard } from "./components/CategoryBoard/CategoryBoard";
+import Footer from "./components/Footer/Footer";
 
 // Backend'den gelen user tipi
 interface ApiUser {
@@ -49,6 +50,9 @@ const MainLayout: React.FC = () => {
           <CategoryBoard />
         </section>
       </main>
+
+      {/* Footer */}
+      <Footer />
     </div>
   );
 };

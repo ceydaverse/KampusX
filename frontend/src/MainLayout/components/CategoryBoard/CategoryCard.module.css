@@ -8,6 +8,15 @@
   font-size: 14px;
   text-align: center;
   color: #fff;
+  text-decoration: none;
+  cursor: pointer;
+  height: 100%;
+  box-sizing: border-box;
+  transition: opacity 0.2s;
+}
+
+.card:hover {
+  opacity: 0.9;
 }
 
 .blue {
