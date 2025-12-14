@@ -1,8 +1,7 @@
 import sql from 'mssql';
-import dotenv from 'dotenv';
+import dotenv from 'dotenv';    
 
 dotenv.config();
-
 // SQL Server bağlantı ayarları
 const sqlConfig: sql.config = {
   user: process.env.DB_USER,         // Örn: sa
