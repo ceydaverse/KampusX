@@ -12,3 +12,4 @@ backend/.env
 # Geçici sistem dosyaları
 .DS_Store
 Thumbs.db
+
