@@ -4,6 +4,9 @@ import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import { getPool, sql } from './db';
 import bildirimRoutes from './routes/bildirim.routes';
+import authRoutes from './routes/auth.routes';
+
+
 
 dotenv.config();
 
@@ -14,7 +17,7 @@ app.use(express.json());
 
 // 🔹 Bildirim route'u
 app.use('/api/bildirimler', bildirimRoutes);
-console.log('📢 Bildirim route yüklendi');  // Artık hata vermeyecek, sadece log gösterecek
+app.use('/api/auth', authRoutes);
 
 const PORT = process.env.PORT || 5000;
 
