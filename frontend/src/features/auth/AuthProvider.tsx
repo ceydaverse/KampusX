@@ -37,7 +37,7 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   // Initial state: localStorage'dan oku
-  const [user, setUserState] = useState<ApiUser | null>(() => getUser());
+  const [user, setUserState] = useState<ApiUser | null>(getUser);
 
   // Hydrate: Sayfa açıldığında localStorage'dan user oku
   useEffect(() => {
@@ -53,7 +53,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Logout: localStorage'dan sil + state temizle
   const logout = () => {
-    clearUser();
+    clearUser(); // Kullanıcı ve token'ı temizler
     setUserState(null);
   };
 

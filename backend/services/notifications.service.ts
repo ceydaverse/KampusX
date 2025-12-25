@@ -118,7 +118,7 @@ export async function getNotificationsByUserId(
     FROM dbo.Bildirimler b
     LEFT JOIN dbo.Kullanicilar k ON (
       (b.tip = 'cevap' AND k.kullanici_id IN (
-        SELECT c.kullanici_id FROM dbo.Cevaplar c WHERE c.cevap_id = b.cevap_id
+        SELECT c.kullanici_id FROM Forum.Cevaplar c WHERE c.cevap_id = b.cevap_id
       ))
       OR (b.tip = 'soru_begeni' AND k.kullanici_id IN (
         SELECT sb.kullanici_id FROM dbo.SoruBegeniler sb 
@@ -248,7 +248,7 @@ export async function getQuestionOwnerId(soruId: number): Promise<number | null>
     .request()
     .input('soru_id', sql.Int, soruId)
     .query(`
-      SELECT kullanici_id FROM dbo.Sorular WHERE soru_id = @soru_id
+      SELECT kullanici_id FROM Forum.Sorular WHERE soru_id = @soru_id
     `);
 
   if (result.recordset.length === 0) {
@@ -268,7 +268,7 @@ export async function getAnswerOwnerId(cevapId: number): Promise<number | null> 
     .request()
     .input('cevap_id', sql.Int, cevapId)
     .query(`
-      SELECT kullanici_id FROM dbo.Cevaplar WHERE cevap_id = @cevap_id
+      SELECT kullanici_id FROM Forum.Cevaplar WHERE cevap_id = @cevap_id
     `);
 
   if (result.recordset.length === 0) {

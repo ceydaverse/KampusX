@@ -1,48 +1,167 @@
+.categoryBoard {
+  padding: 24px 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
 .board {
   width: 100%;
   display: grid;
-  height: 100%;
-  gap: 16x;
-
-  /* Canva’daki gibi mozaik düzen */
+  margin-left: 0;
+  padding-left: 0;
+  gap: 14px;
+  align-items: stretch;
+  grid-template-columns: 1.2fr 1.2fr 1.1fr 1.1fr;
+  grid-auto-rows: minmax(140px, auto);
   grid-template-areas:
-    "ders       iliski     grup"
-    "ders       eglence    yurt"
-    "burs       kultur     yurt"
-    "spor       daha       yurt";
-    
-  grid-template-columns: 1fr 1fr 1fr;   /* 3 kolon */
-  grid-auto-rows: 130px;               /* yükseklikler */
+    "ders iliski grup yurt"
+    "ders eglence yemek yurt"
+    "ders burs   uni   .";
+  padding-bottom: 24px;
+  flex: 1;
 }
 
-/* Ortak kart stili */
-.card {
-  border-radius: 20px;
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  color: white;
-  font-size: 15px;
-  text-align: center;
+/* Her kartın grid'teki yeri */
+.ders {
+  grid-area: ders;
 }
 
-/* Renkler */
-.pink {
+.iliski {
+  grid-area: iliski;
 }
 
-.blue {
-  background-color: #6ec6ff;
+.grup {
+  grid-area: grup;
 }
 
-/* Daha büyük özel kutular: */
-.board > [style*="yurt"] {
-  /* Konaklama & Yurt Hayatı (dik uzun blok) */
-  grid-row: span 3;
+.yurt {
+  grid-area: yurt;
 }
 
-.board > [style*="ders"] {
-  /* Gündemin sağındaki büyük mavi kutu */
-  grid-row: span 2;
+.eglence {
+  grid-area: eglence;
+}
+
+.yemek {
+  grid-area: yemek;
+}
+
+.burs {
+  grid-area: burs;
+}
+
+.uni {
+  grid-area: uni;
+}
+
+/* ============================================
+   KATEGORİ ANİMASYONLARI VE EFEKTLER
+   ============================================ */
+
+/* 🎉 Eğlence – Özel efektler kaldırıldı, düz yeşil tasarım */
+.themeFun {
+  background: none !important;
+  background-image: none !important;
+  animation: none !important;
+}
+
+.themeFun::before,
+.themeFun::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* ❤️ Sosyal – Kalp atışı animasyonu kaldırıldı */
+
+/* 💼 Kariyer – Altın progress bar kaldırıldı */
+.careerProgressBar {
+  /* Sarı çizgi kaldırıldı */
+}
+
+/* 💬 Sohbet – Yazıyor animasyonu */
+.typingIndicator {
+  position: relative;
+}
+
+/* İçerik kaldırıldı - daha sonra tasarlanacak */
+.typingIndicator::after {
+  content: "";
+  display: none;
+}
+
+/* 🏠 Konaklama – Desen kaldırıldı, düz yeşil tasarım */
+.housingCard {
+  background-image: none !important;
+  background-color: #22c55e !important;
+  animation: none !important;
+  filter: none !important;
+  opacity: 1 !important;
+  mask: none !important;
+}
+
+.housingCard:hover {
+  background-color: #16a34a !important;
+}
+
+.housingCard::before,
+.housingCard::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* 🍕 Yemek – Hover brightness */
+.foodCard {
+  transition: filter 0.25s ease, transform 0.25s ease;
+}
+
+.foodCard:hover {
+  filter: brightness(1.25);
+  transform: scale(1.03);
+}
+
+/* 📰 Gündem – Başlık bandı */
+.newsHeaderBand {
+  border-top: 4px solid #ff5f5f;
+}
+
+/* ✨ Yeni – Highlight animasyonu */
+.newsItemNew {
+  animation: newGlow 1.7s infinite;
+}
+
+@keyframes newGlow {
+  0% {
+    box-shadow: 0 0 0px rgba(255, 230, 0, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(255, 230, 0, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 0px rgba(255, 230, 0, 0.5);
+  }
+}
+
+/* 🎯 Önerilen – Güçlü bounce hover efekti */
+.funCard {
+  transition: transform 0.3s ease;
+}
+
+.funCard:hover {
+  animation: bounce 0.6s ease;
+}
+
+@keyframes bounce {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.15);
+  }
+  60% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
 }

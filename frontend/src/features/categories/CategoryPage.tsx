@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
+import { useAuth } from "../../features/auth/AuthProvider";
 import Header from "../../MainLayout/components/Header/Header";
 import { launchFireworks } from "../../shared/utils/fireworks";
+import { Toast } from "../../shared/components/Toast/Toast";
 import styles from "./CategoryPage.module.css";
 import questionStyles from "../questions/questions.module.css";
 import { QuestionList } from "../questions/components/QuestionList";
 import { NewQuestionModal } from "../questions/components/NewQuestionModal";
+import { QuestionDetailModal } from "../questions/components/QuestionDetailModal";
 import { createQuestion, fetchQuestions } from "../questions/questionsApi";
 import { fetchCategories, type Category } from "./categoriesApi";
 import type { Question } from "../questions/types";
@@ -61,6 +64,8 @@ const HIDE_TEMPLATE_FOR: string[] = [
 
 export default function CategoryPage() {
   const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [selectedAltCategoryId, setSelectedAltCategoryId] = useState<number | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState<boolean>(false);
@@ -72,6 +77,10 @@ export default function CategoryPage() {
   const [loadingCategories, setLoadingCategories] = useState<boolean>(false);
   const [kategoriId, setKategoriId] = useState<number | null>(null);
   const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showToast, setShowToast] = useState(false);
+  const [selectedQuestionId, setSelectedQuestionId] = useState<number | null>(null);
+  const [scrollToAnswers, setScrollToAnswers] = useState(false);
   
   // Slug'ı güvenli şekilde al
   const kategoriSlug = slug ?? "ders-akademi";
@@ -167,7 +176,7 @@ export default function CategoryPage() {
     loadQuestions();
   }, [loadQuestions]);
 
-  const resolveUserId = () => {
+  const resolveUserId = (): number | null => {
     try {
       const stored = localStorage.getItem("kampusxUser");
       if (stored) {
@@ -177,16 +186,54 @@ export default function CategoryPage() {
     } catch (err) {
       console.error("Kullanıcı bilgisi okunamadı:", err);
     }
-    // TODO: Auth eklendiğinde gerçek kullanıcıyı kullan
-    return 15;
+    return null;
+  };
+
+  const handleOpenModal = () => {
+    // Kullanıcı kontrolü - localStorage'dan kontrol et
+    try {
+      const stored = localStorage.getItem("kampusxUser");
+      if (!stored) {
+        // Kullanıcı giriş yapmamış - toast göster
+        setToastMessage("Soru sormak için giriş yapmalısın.");
+        setShowToast(true);
+        return;
+      }
+      // JSON parse kontrolü
+      const parsed = JSON.parse(stored);
+      if (!parsed || !parsed.id) {
+        setToastMessage("Soru sormak için giriş yapmalısın.");
+        setShowToast(true);
+        return;
+      }
+    } catch (err) {
+      // Parse hatası - kullanıcı yok say
+      setToastMessage("Soru sormak için giriş yapmalısın.");
+      setShowToast(true);
+      return;
+    }
+    
+    // Kullanıcı giriş yapmış - modal aç
+    setModalOpen(true);
   };
 
   const handleCreateQuestion = async (payload: {
     baslik: string;
     soru_metin: string;
+    kategori_id: number;
+    etiketler?: string[];
   }) => {
-    if (!kategoriId) {
-      setCreateError("Kategori bulunamadı");
+    // Kullanıcı kontrolü
+    const userId = resolveUserId();
+    if (!userId || !user) {
+      setCreateError("Soru sormak için giriş yapmalısın");
+      setModalOpen(false);
+      navigate("/auth");
+      return;
+    }
+
+    if (!payload.kategori_id) {
+      setCreateError("Kategori seçilmelidir");
       return;
     }
     
@@ -194,10 +241,11 @@ export default function CategoryPage() {
     setCreateError(null);
     try {
       const newItem = await createQuestion({
-        kategori_id: kategoriId,
-        kullanici_id: resolveUserId(),
+        kategori_id: payload.kategori_id,
+        kullanici_id: userId,
         baslik: payload.baslik,
         soru_metin: payload.soru_metin,
+        etiketler: payload.etiketler,
       });
       setQuestions((prev) => [newItem, ...prev]);
       setModalOpen(false);
@@ -270,8 +318,9 @@ export default function CategoryPage() {
                 <button
                   type="button"
                   className={questionStyles.openButton}
-                  onClick={() => setModalOpen(true)}
-                  disabled={!kategoriId || loadingCategories}
+                  onClick={handleOpenModal}
+                  disabled={!kategoriId || loadingCategories || !user}
+                  title={!user ? "Giriş yapman gerekiyor" : ""}
                 >
                   Soru Aç
                 </button>
@@ -286,6 +335,17 @@ export default function CategoryPage() {
                     questions={questions}
                     loading={loadingQuestions || loadingCategories}
                     error={questionsError}
+                    onQuestionDeleted={(questionId) => {
+                      setQuestions((prev) => prev.filter((q) => q.soru_id !== questionId));
+                    }}
+                    onQuestionClick={(questionId) => {
+                      setScrollToAnswers(false);
+                      setSelectedQuestionId(questionId);
+                    }}
+                    onViewAnswers={(questionId) => {
+                      setScrollToAnswers(true);
+                      setSelectedQuestionId(questionId);
+                    }}
                   />
                 )}
               </div>
@@ -322,6 +382,28 @@ export default function CategoryPage() {
         onSubmit={handleCreateQuestion}
         loading={creating}
         error={createError}
+        categories={altCategories}
+      />
+      <Toast
+        message={toastMessage || ""}
+        show={showToast}
+        duration={3000}
+        onClose={() => {
+          setShowToast(false);
+          setToastMessage(null);
+        }}
+      />
+      <QuestionDetailModal
+        questionId={selectedQuestionId}
+        onClose={() => {
+          setSelectedQuestionId(null);
+          setScrollToAnswers(false);
+        }}
+        scrollToAnswers={scrollToAnswers}
+        onAnswerCreated={() => {
+          // Cevap eklendiğinde soruları yeniden yükle
+          loadQuestions();
+        }}
       />
     </div>
   );

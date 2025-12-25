@@ -1,6 +1,5 @@
 import React from "react";
 import { CategoryCard } from "./CategoryCard";
-import { launchFireworks } from "../../../shared/utils/fireworks";
 import styles from "./CategoryBoard.module.css";
 
 /**
@@ -10,19 +9,17 @@ import styles from "./CategoryBoard.module.css";
  */
 export const CategoryBoard: React.FC = () => {
   const CATEGORY_EFFECT_CLASS: Record<string, string> = {
-    eglence: styles.themeFun,
-    iliski: styles.socialHeart,
+    // eglence: themeFun kaldırıldı - düz yeşil tasarım
+    // iliski: heartBeat animasyonu kaldırıldı
     burs: styles.careerProgressBar,
     grup: styles.typingIndicator,
     yurt: styles.housingCard,
     yemek: styles.foodCard,
-    daha: styles.funCard,
+    // daha: funCard kaldırıldı - kart UI'dan kaldırıldı
   };
 
   const handleCategoryClick = (key: string) => {
-    if (key === "eglence") {
-      launchFireworks();
-    }
+    // eglence için fireworks kaldırıldı
   };
 
   const categories = [
@@ -34,8 +31,8 @@ export const CategoryBoard: React.FC = () => {
     { id: "yemek", title: "Yemek & Mekan Önerileri", color: "pink" as const, slug: "yemek-mekan-onerileri" },
     { id: "burs", title: "Burslar & İş İlanları & Kariyer", color: "pink" as const, slug: "burs-is-ilanlari-kariyer" },
     { id: "uni", title: "Üniversite & Şehir Hakkında", color: "pink" as const, slug: "universite-sehir-hakkinda" },
-    { id: "daha", title: "Ve daha fazlası", color: "pink" as const, slug: "ve-daha-fazlasi" },
-  ];
+    // "Ve daha fazlası" kartı UI'dan kaldırıldı
+  ].filter(category => category.id !== "daha");
 
   return (
     <div className={styles.categoryBoard}>

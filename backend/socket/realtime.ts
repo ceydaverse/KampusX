@@ -1,26 +1,22 @@
-import { Server as SocketIOServer } from 'socket.io';
+import { Server as SocketIOServer } from "socket.io";
 
 /**
- * Socket.IO instance singleton
- * Merkezi Socket.IO yönetimi için
+ * Socket.IO instance'ını servislerden erişilebilir yapmak için
+ * Tek instance tutulur ve getIO() ile erişilir
  */
-let io: SocketIOServer | null = null;
+let ioRef: SocketIOServer | null = null;
 
 /**
- * Socket.IO instance'ını al
- * @returns Socket.IO server instance veya null (henüz initialize edilmediyse)
+ * Socket.IO server instance'ını set et
+ */
+export function setIO(io: SocketIOServer): void {
+  ioRef = io;
+  console.log("✅ Socket.IO instance set in realtime.ts");
+}
+
+/**
+ * Socket.IO server instance'ını get et
  */
 export function getIO(): SocketIOServer | null {
-  return io;
+  return ioRef;
 }
-
-/**
- * Socket.IO instance'ını set et
- * @param socketIO Socket.IO server instance
- */
-export function setIO(socketIO: SocketIOServer): void {
-  io = socketIO;
-}
-
-
-

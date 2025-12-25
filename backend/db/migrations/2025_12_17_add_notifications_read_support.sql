@@ -60,3 +60,4 @@ PRINT 'Bildirimler tablosu okundu desteği ile güncellendi';
 
 
 
+

@@ -131,7 +131,7 @@ export async function toggleAnswerLike(
         const answerInfo = await pool
           .request()
           .input('cevap_id', sql.Int, cevapId)
-          .query(`SELECT soru_id FROM dbo.Cevaplar WHERE cevap_id = @cevap_id`);
+          .query(`SELECT soru_id FROM Forum.Cevaplar WHERE cevap_id = @cevap_id`);
 
         const soruId = answerInfo.recordset[0]?.soru_id || null;
         const actorName = await getUserDisplayName(kullaniciId);
@@ -184,7 +184,7 @@ export async function getLikedQuestionsByUserId(kullaniciId: number): Promise<an
         s.kategori_id,
         sb.tarih AS begeni_tarihi
       FROM dbo.SoruBegeniler sb
-      INNER JOIN dbo.Sorular s ON sb.soru_id = s.soru_id
+      INNER JOIN Forum.Sorular s ON sb.soru_id = s.soru_id
       WHERE sb.kullanici_id = @kullanici_id
       ORDER BY sb.tarih DESC
     `);
@@ -216,7 +216,7 @@ export async function getLikedAnswersByUserId(kullaniciId: number): Promise<any[
         c.soru_id,
         cb.tarih AS begeni_tarihi
       FROM dbo.CevapBegeniler cb
-      INNER JOIN dbo.Cevaplar c ON cb.cevap_id = c.cevap_id
+      INNER JOIN Forum.Cevaplar c ON cb.cevap_id = c.cevap_id
       WHERE cb.kullanici_id = @kullanici_id
       ORDER BY cb.tarih DESC
     `);

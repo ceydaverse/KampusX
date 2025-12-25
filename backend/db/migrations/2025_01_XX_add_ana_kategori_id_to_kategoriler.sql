@@ -22,3 +22,4 @@ SELECT TOP 5 kategori_id, kategori_adi, ana_kategori_id FROM dbo.Kategoriler;
 
 
 
+

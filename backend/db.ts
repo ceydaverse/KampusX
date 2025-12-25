@@ -9,6 +9,7 @@ let sqlConfig: sql.config | null = null;
 let pool: sql.ConnectionPool | null = null;
 
 function getSqlConfig(): sql.config {
+  // Lazy initialization - sadece ilk çağrıldığında env'leri oku
   if (sqlConfig) return sqlConfig;
 
   function getEnv(name: string): string | undefined {
@@ -21,8 +22,9 @@ function getSqlConfig(): sql.config {
   const DB_SERVER = getEnv("DB_SERVER");
   const DB_PORT_STR = getEnv("DB_PORT");
 
+  // Env variable'lar yoksa hata fırlatma, sadece log bas
   if (!DB_USER || !DB_PASSWORD || !DB_NAME || !DB_SERVER || !DB_PORT_STR) {
-    const missing: string[] = [];
+    const missing = [];
     if (!DB_USER) missing.push("DB_USER");
     if (!DB_PASSWORD) missing.push("DB_PASSWORD");
     if (!DB_NAME) missing.push("DB_NAME");
@@ -61,6 +63,7 @@ export async function getPool(): Promise<sql.ConnectionPool> {
   if (pool && pool.connected) return pool;
 
   try {
+    // Lazy config initialization
     const config = getSqlConfig();
     pool = await new sql.ConnectionPool(config).connect();
     console.log("✅ DB connected");
@@ -77,3 +80,4 @@ export async function getPool(): Promise<sql.ConnectionPool> {
 }
 
 export { sql };
+

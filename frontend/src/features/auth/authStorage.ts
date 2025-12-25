@@ -1,96 +1,75 @@
 import type { ApiUser } from "./AuthProvider";
 
-// localStorage key'leri - merkezi sabitler
-const USER_KEY = "kampusxUser";
-const TOKEN_KEY = "kampusxToken";
-
-// ==================== USER FUNCTIONS ====================
+const STORAGE_KEY = "kampusxUser";
+const TOKEN_KEY = "token";
 
 /**
- * localStorage'dan kullanıcı bilgisini getir
- * @returns ApiUser | null
+ * localStorage'dan kullanıcı bilgisini okur
+ * @returns Kullanıcı bilgisi veya null
  */
 export function getUser(): ApiUser | null {
   try {
-    const stored = localStorage.getItem(USER_KEY);
+    const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) {
       return null;
     }
-    const user = JSON.parse(stored) as ApiUser;
-    return user;
+    const parsed: ApiUser = JSON.parse(stored);
+    return parsed;
   } catch (err) {
-    console.error("getUser error:", err);
+    console.error("Kullanıcı bilgisi okunamadı:", err);
     return null;
   }
 }
 
 /**
- * Kullanıcı bilgisini localStorage'a kaydet
- * @param user ApiUser
+ * Kullanıcı bilgisini localStorage'a kaydeder
+ * @param user Kullanıcı bilgisi
  */
 export function saveUser(user: ApiUser): void {
   try {
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
   } catch (err) {
-    console.error("saveUser error:", err);
+    console.error("Kullanıcı bilgisi kaydedilemedi:", err);
   }
 }
 
 /**
- * Kullanıcı bilgisini localStorage'dan temizle
+ * Kullanıcı bilgisini ve token'ı localStorage'dan siler
  */
 export function clearUser(): void {
   try {
-    localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(TOKEN_KEY);
   } catch (err) {
-    console.error("clearUser error:", err);
-  }
-}
-
-// ==================== TOKEN FUNCTIONS ====================
-
-/**
- * localStorage'dan token'ı getir
- * @returns string | null
- */
-export function getToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_KEY);
-  } catch (err) {
-    console.error("getToken error:", err);
-    return null;
+    console.error("Kullanıcı bilgisi silinemedi:", err);
   }
 }
 
 /**
- * Token'ı localStorage'a kaydet
- * @param token string
+ * Token'ı localStorage'a kaydeder
+ * @param token Token string
  */
 export function saveToken(token: string): void {
   try {
     localStorage.setItem(TOKEN_KEY, token);
   } catch (err) {
-    console.error("saveToken error:", err);
+    console.error("Token kaydedilemedi:", err);
   }
 }
 
 /**
- * Token'ı localStorage'dan temizle
+ * Token'ı localStorage'dan okur
+ * @returns Token string veya null
  */
-export function clearToken(): void {
+export function getToken(): string | null {
   try {
-    localStorage.removeItem(TOKEN_KEY);
+    return localStorage.getItem(TOKEN_KEY);
   } catch (err) {
-    console.error("clearToken error:", err);
+    console.error("Token okunamadı:", err);
+    return null;
   }
 }
 
-// ==================== AUTH FUNCTIONS ====================
 
-/**
- * Tüm auth bilgilerini temizle (user + token)
- */
-export function clearAuth(): void {
-  clearUser();
-  clearToken();
-}
+
+
