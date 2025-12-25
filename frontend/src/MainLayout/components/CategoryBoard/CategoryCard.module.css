@@ -12,7 +12,7 @@
   cursor: pointer;
   height: 100%;
   box-sizing: border-box;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s, background-color 0.2s;
 }
 
 .card:hover {
@@ -20,9 +20,17 @@
 }
 
 .blue {
-  background-color: #6ec6ff;
+  background-color: #22c55e;
+}
+
+.blue:hover {
+  background-color: #16a34a;
 }
 
 .pink {
-  background-color: #ff74ad;
+  background-color: #22c55e;
+}
+
+.pink:hover {
+  background-color: #16a34a;
 }

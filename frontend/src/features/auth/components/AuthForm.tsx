@@ -1,316 +1,261 @@
-import React, { useState } from "react";
-import axios from "axios";
+import React, { useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { login, register, type AuthResponse } from "../authApi";
+import { useAuth } from "../AuthProvider";
+import { saveToken } from "../authStorage";
 import "../styles/auth.css";
 
+type ActiveTab = "login" | "register";
+
 interface AuthFormProps {
-  activeTab: "login" | "register";
-  onTabChange?: (tab: "login" | "register") => void;
+  activeTab: ActiveTab;
+  onTabChange?: (tab: ActiveTab) => void;
 }
 
-interface ApiUser {
-  id: number;
+type FormState = {
+  // ortak
+  email: string;
+  password: string;
+
+  // register extra
   ad: string;
   soyad: string;
-  email: string;
-  universite?: string | null;
-  bolum?: string | null;
-  cinsiyet?: string | null;
-}
+  kullanici_adi: string;
+};
 
-/**
- * AuthForm Component
- * Form alanlarını ve butonları gösteren component
- * activeTab prop'una göre login veya register formunu gösterir
- */
+const initialState: FormState = {
+  email: "",
+  password: "",
+  ad: "",
+  soyad: "",
+  kullanici_adi: "",
+};
+
 const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
-  const [formData, setFormData] = useState({
-    fullName: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-    rememberMe: false,
-    acceptTerms: false,
-  });
+  const isRegister = activeTab === "register";
 
+  const [formData, setFormData] = useState<FormState>(initialState);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const isRegister = activeTab === "register";
+  const navigate = useNavigate();
+  const { login: loginUser } = useAuth();
 
-  // "Ad Soyad"ı ikiye bölmek için helper
-  const splitName = (name: string): { ad: string; soyad: string } => {
-    const parts = name.trim().split(" ");
-    if (parts.length === 1) {
-      return { ad: parts[0], soyad: "" };
-    }
-    const ad = parts[0];
-    const soyad = parts.slice(1).join(" ");
-    return { ad, soyad };
-  };
+  // ✅ redirect paramını oku (/auth?redirect=/kategori/ders-akademi)
+  const [searchParams] = useSearchParams();
+  const redirectTo = useMemo(() => {
+    const r = searchParams.get("redirect");
+    return r && r.startsWith("/") ? r : "/";
+  }, [searchParams]);
 
-  // Input değişikliklerini handle eden fonksiyon
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
-  };
+  const setField =
+    (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) => {
+      setFormData((prev) => ({ ...prev, [key]: e.target.value }));
+    };
 
-  // Form submit handler (BURADA backend çağrısı var)
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const resetAlerts = () => {
     setError(null);
     setSuccessMessage(null);
+  };
 
-    // Register modundaysak ekstra kontroller
+  const validate = (): string | null => {
+    if (!formData.email.trim()) return "Email zorunludur.";
+    if (!formData.password.trim()) return "Şifre zorunludur.";
+
     if (isRegister) {
-      if (!formData.acceptTerms) {
-        setError("Kullanım koşullarını kabul etmelisiniz.");
-        return;
-      }
-      if (formData.password !== formData.confirmPassword) {
-        setError("Şifre ve şifre tekrarı aynı olmalıdır.");
-        return;
-      }
-      if (!formData.fullName.trim()) {
-        setError("Ad Soyad alanı boş olamaz.");
-        return;
-      }
+      if (!formData.ad.trim()) return "Ad zorunludur.";
+      if (!formData.soyad.trim()) return "Soyad zorunludur.";
+      if (!formData.kullanici_adi.trim()) return "Kullanıcı adı zorunludur.";
+    }
+
+    return null;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    resetAlerts();
+
+    const v = validate();
+    if (v) {
+      setError(v);
+      return;
     }
 
     setLoading(true);
-
     try {
       if (isRegister) {
         // ----------- KAYIT OL -----------
-        const { ad, soyad } = splitName(formData.fullName);
-
-        const response = await axios.post<{
-          success: boolean;
-          user?: ApiUser;
-          message?: string;
-        }>("http://localhost:5000/api/auth/register", {
-          ad,
-          soyad,
-          email: formData.email,
+        const response: AuthResponse = await register({
+          ad: formData.ad.trim(),
+          soyad: formData.soyad.trim(),
+          kullanici_adi: formData.kullanici_adi.trim(),
+          email: formData.email.trim(),
           password: formData.password,
-          // opsiyonel alanları şimdilik null gönderiyoruz
+          // opsiyonel alanlar (backend beklemiyorsa authApi içinde ignore edilebilir)
           universite: null,
           bolum: null,
           cinsiyet: null,
           dogum_yili: null,
         });
 
-        if (response.data.success) {
+        if (response.success) {
           setSuccessMessage("Kayıt başarılı! Artık giriş yapabilirsiniz.");
-          // İstersen otomatik login tabına al
+          // login tabına geçir
           onTabChange?.("login");
+          // şifreyi koruyup email’i koruyarak kullanıcıyı hızlı girişe yöneltmek için
+          setFormData((prev) => ({
+            ...prev,
+            password: "",
+          }));
         } else {
-          setError(response.data.message || "Kayıt başarısız.");
+          setError(response.message || "Kayıt başarısız.");
         }
       } else {
         // ----------- GİRİŞ YAP -----------
-        const response = await axios.post<{
-          success: boolean;
-          user?: ApiUser;
-          message?: string;
-        }>("http://localhost:5000/api/auth/login", {
-          email: formData.email,
+        const response: AuthResponse = await login({
+          email: formData.email.trim(),
           password: formData.password,
         });
 
-        if (response.data.success && response.data.user) {
-          // Kullanıcı bilgilerini localStorage'a kaydet
-          localStorage.setItem('user', JSON.stringify(response.data.user));
-          
-          setSuccessMessage(
-            `Giriş Başarılı! Hoş geldin ${response.data.user.ad} ${response.data.user.soyad}!`
-          );
-          
-          // 2 saniye sonra ana sayfaya yönlendir (istersen)
-          setTimeout(() => {
-            window.location.href = '/';
-          }, 2000);
+        if (response.success && response.user) {
+          const user = response.user;
+
+          // token varsa kaydet
+          if (response.token) {
+            saveToken(response.token);
+          }
+
+          // AuthProvider state güncelle (Header vs için)
+          loginUser(user);
+
+          setSuccessMessage(`Hoş geldin ${user.ad} ${user.soyad}!`);
+          // İstersen alert istemiyorsan kaldırabilirsin
+          alert(`Hoş geldin ${user.ad} ${user.soyad}!`);
+
+          // geldiğin sayfaya dön
+          navigate(redirectTo, { replace: true });
         } else {
-          setError(response.data.message || "Giriş başarısız.");
+          setError(response.message || "Giriş başarısız.");
         }
       }
     } catch (err: any) {
       const msg =
         err?.response?.data?.message ||
-        "Sunucuya bağlanırken bir hata oluştu.";
+        err?.message ||
+        "Beklenmeyen bir hata oluştu.";
       setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  // Tab değiştiğinde form'u sıfırla
-  React.useEffect(() => {
-    setFormData({
-      fullName: "",
-      email: "",
-      password: "",
-      confirmPassword: "",
-      rememberMe: false,
-      acceptTerms: false,
-    });
-    setError(null);
-    setSuccessMessage(null);
-  }, [activeTab]);
-
   return (
-    <form className="auth-form" onSubmit={handleSubmit}>
-      <div className="auth-form-content">
-        {/* Sol taraf: Input alanları */}
-        <div className="auth-form-inputs">
-          {isRegister && (
-            <div className="auth-input-group">
-              <label htmlFor="fullName">Adı Soyadı</label>
+    <div className="auth-form-container">
+      <form className="auth-form" onSubmit={handleSubmit}>
+        <h2 className="auth-title">{isRegister ? "Kayıt Ol" : "Giriş Yap"}</h2>
+
+        {error && <div className="auth-alert auth-alert-error">{error}</div>}
+        {successMessage && (
+          <div className="auth-alert auth-alert-success">{successMessage}</div>
+        )}
+
+        {isRegister && (
+          <>
+            <div className="auth-field">
+              <label>Ad</label>
               <input
                 type="text"
-                id="fullName"
-                name="fullName"
-                value={formData.fullName}
-                onChange={handleChange}
-                placeholder="Adınız ve soyadınız"
+                value={formData.ad}
+                onChange={setField("ad")}
+                placeholder="Ad"
+                autoComplete="given-name"
               />
             </div>
-          )}
 
-          <div className="auth-input-group">
-            <label htmlFor="email">e-posta Adresi</label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="ornek@email.com"
-            />
-          </div>
-
-          <div className="auth-input-group">
-            <label htmlFor="password">Şifre</label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="Şifrenizi girin"
-            />
-          </div>
-
-          {isRegister && (
-            <div className="auth-input-group">
-              <label htmlFor="confirmPassword">Şifre Tekrar</label>
+            <div className="auth-field">
+              <label>Soyad</label>
               <input
-                type="password"
-                id="confirmPassword"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                placeholder="Şifrenizi tekrar girin"
+                type="text"
+                value={formData.soyad}
+                onChange={setField("soyad")}
+                placeholder="Soyad"
+                autoComplete="family-name"
               />
             </div>
+
+            <div className="auth-field">
+              <label>Kullanıcı Adı</label>
+              <input
+                type="text"
+                value={formData.kullanici_adi}
+                onChange={setField("kullanici_adi")}
+                placeholder="kullanici_adi"
+                autoComplete="username"
+              />
+            </div>
+          </>
+        )}
+
+        <div className="auth-field">
+          <label>Email</label>
+          <input
+            type="email"
+            value={formData.email}
+            onChange={setField("email")}
+            placeholder="ornek@mail.com"
+            autoComplete={isRegister ? "email" : "username"}
+          />
+        </div>
+
+        <div className="auth-field">
+          <label>Şifre</label>
+          <input
+            type="password"
+            value={formData.password}
+            onChange={setField("password")}
+            placeholder="••••••••"
+            autoComplete={isRegister ? "new-password" : "current-password"}
+          />
+        </div>
+
+        <button className="auth-submit" type="submit" disabled={loading}>
+          {loading ? "Lütfen bekleyin..." : isRegister ? "Kayıt Ol" : "Giriş Yap"}
+        </button>
+
+        <div className="auth-footer">
+          {isRegister ? (
+            <span>
+              Zaten hesabın var mı?{" "}
+              <button
+                type="button"
+                className="auth-link"
+                onClick={() => {
+                  resetAlerts();
+                  onTabChange?.("login");
+                }}
+              >
+                Giriş Yap
+              </button>
+            </span>
+          ) : (
+            <span>
+              Hesabın yok mu?{" "}
+              <button
+                type="button"
+                className="auth-link"
+                onClick={() => {
+                  resetAlerts();
+                  onTabChange?.("register");
+                }}
+              >
+                Kayıt Ol
+              </button>
+            </span>
           )}
         </div>
-
-        {/* Sağ taraf: Sosyal login butonları (şimdilik sadece görüntü) */}
-        <div className="auth-social-buttons">
-          <button type="button" className="social-btn social-btn--google">
-            G
-          </button>
-          <button type="button" className="social-btn social-btn--facebook">
-            F
-          </button>
-          <button type="button" className="social-btn social-btn--facebook">
-            F
-          </button>
-          <button type="button" className="social-btn social-btn--apple">
-            Apple
-          </button>
-        </div>
-      </div>
-
-      {/* Hata / başarı mesajları */}
-      {error && <div className="auth-alert auth-alert--error">{error}</div>}
-      {successMessage && (
-        <div className="auth-alert auth-alert--success">{successMessage}</div>
-      )}
-
-      {/* Checkbox alanı */}
-      <div className="auth-checkbox-group">
-        {isRegister ? (
-          <>
-            <label className="auth-checkbox-label">
-              <input
-                type="checkbox"
-                name="acceptTerms"
-                checked={formData.acceptTerms}
-                onChange={handleChange}
-              />
-              <span>
-                Kullanım Koşulları ve Gizlilik Politikasını okudum ve kabul
-                ediyorum.
-              </span>
-            </label>
-            <p className="auth-help-text">Zaten hesabım var mı?</p>
-          </>
-        ) : (
-          <>
-            <label className="auth-checkbox-label">
-              <input
-                type="checkbox"
-                name="rememberMe"
-                checked={formData.rememberMe}
-                onChange={handleChange}
-              />
-              <span>Beni hatırla</span>
-            </label>
-            <p className="auth-help-text">Hesabın yok mu?</p>
-          </>
-        )}
-      </div>
-
-      {/* Alt butonlar */}
-      <div className="auth-form-actions">
-        {isRegister ? (
-          <>
-            <button type="submit" className="btn-primary-pink" disabled={loading}>
-              {loading ? "İşlem yapılıyor..." : "Hesap Oluştur"}
-            </button>
-            <button
-              type="button"
-              className="btn-outline-blue"
-              onClick={() => onTabChange?.("login")}
-            >
-              Giriş Yap
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              className="btn-primary-pink"
-              onClick={() => onTabChange?.("register")}
-            >
-              Kayıt Ol
-            </button>
-            <button
-              type="submit"
-              className="btn-outline-blue"
-              disabled={loading}
-            >
-              {loading ? "İşlem yapılıyor..." : "Giriş Yap"}
-            </button>
-          </>
-        )}
-      </div>
-    </form>
+      </form>
+    </div>
   );
 };
 

@@ -1,10 +1,35 @@
-import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useAuth } from "../../features/auth/AuthProvider";
 import Header from "../../MainLayout/components/Header/Header";
 import { launchFireworks } from "../../shared/utils/fireworks";
+import { Toast } from "../../shared/components/Toast/Toast";
 import styles from "./CategoryPage.module.css";
+import questionStyles from "../questions/questions.module.css";
+import { QuestionList } from "../questions/components/QuestionList";
+import { NewQuestionModal } from "../questions/components/NewQuestionModal";
+import { QuestionDetailModal } from "../questions/components/QuestionDetailModal";
+import { createQuestion, fetchQuestions } from "../questions/questionsApi";
+import { fetchCategories, type Category } from "./categoriesApi";
+import type { Question } from "../questions/types";
 
-const CATEGORY_FILTERS: Record<string, string[]> = {
+// Slug -> ana_kategori_id mapping
+// Not: Bu ID'ler DB'deki dbo.Kategoriler tablosundaki ana_kategori_id değerlerine göre ayarlanmalıdır
+const ANA_KATEGORI_ID_BY_SLUG: Record<string, number> = {
+  "ders-akademi": 1,
+  "iliskiler-sosyal-yasam": 2,
+  "konaklama-yurt-hayati": 3,
+  "eglence": 4,
+  // Diğer kategoriler için mapping eklenebilir
+  "yemek-mekan-onerileri": 5,
+  "universite-sehir-hakkinda": 6,
+  "burs-is-ilanlari-kariyer": 7,
+  "grup-sohbetleri": 8,
+  "ve-daha-fazlasi": 9,
+};
+
+// Fallback için eski filtreler (DB'den gelmezse kullanılır)
+const CATEGORY_FILTERS_FALLBACK: Record<string, string[]> = {
   "ders-akademi": [
     "Ders & Ders Notları",
     "İlişkiler & Sosyal Yaşam",
@@ -18,17 +43,6 @@ const CATEGORY_FILTERS: Record<string, string[]> = {
   "grup-sohbetleri": ["Genel", "Bölüm", "Kulüp", "Etkinlik"],
   "burs-is-ilanlari-kariyer": ["Burslar", "İş İlanları", "Staj", "Kariyer"],
   "ve-daha-fazlasi": ["Diğer", "Öneriler", "Yardım"],
-};
-
-const THEME_CLASS_MAP: Record<string, string> = {
-  "ders-akademi": "themeAcademic",
-  "eglence": "themeFun",
-  "iliskiler-sosyal-yasam": "themeSocial",
-  "burs-is-ilanlari-kariyer": "themeCareer",
-  "grup-sohbetleri": "themeChat",
-  "konaklama-yurt-hayati": "themeHousing",
-  "yemek-mekan-onerileri": "themeFood",
-  "gundem": "themeNews",
 };
 
 const PAGE_THEME_CLASS: Record<string, string> = {
@@ -47,13 +61,33 @@ const HIDE_TEMPLATE_FOR: string[] = [
   "grup-sohbetleri",
 ];
 
+
 export default function CategoryPage() {
   const { slug } = useParams<{ slug: string }>();
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [selectedAltCategoryId, setSelectedAltCategoryId] = useState<number | null>(null);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [loadingQuestions, setLoadingQuestions] = useState<boolean>(false);
+  const [questionsError, setQuestionsError] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [altCategories, setAltCategories] = useState<Category[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState<boolean>(false);
+  const [kategoriId, setKategoriId] = useState<number | null>(null);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showToast, setShowToast] = useState(false);
+  const [selectedQuestionId, setSelectedQuestionId] = useState<number | null>(null);
+  const [scrollToAnswers, setScrollToAnswers] = useState(false);
   
   // Slug'ı güvenli şekilde al
   const kategoriSlug = slug ?? "ders-akademi";
   const shouldHideTemplate = HIDE_TEMPLATE_FOR.includes(kategoriSlug);
+  
+  // Slug'dan ana_kategori_id bul
+  const anaKategoriId = ANA_KATEGORI_ID_BY_SLUG[kategoriSlug] || null;
 
   // Konfeti animasyonu - sadece Eğlence kategorisinde
   useEffect(() => {
@@ -62,47 +96,204 @@ export default function CategoryPage() {
     }
   }, [kategoriSlug]);
 
-  // Tema class'ını belirle
-  const themeClassName =
-    kategoriSlug && THEME_CLASS_MAP[kategoriSlug]
-      ? styles[THEME_CLASS_MAP[kategoriSlug]]
-      : "";
 
-  // Slug'a göre filtreleri seç
-  const filters =
-    kategoriSlug && CATEGORY_FILTERS[kategoriSlug]
-      ? CATEGORY_FILTERS[kategoriSlug]
-      : CATEGORY_FILTERS["ders-akademi"];
-
-  // İlk filtreyi aktif yap
-  useEffect(() => {
-    if (filters.length > 0 && activeFilter === null) {
-      setActiveFilter(filters[0]);
-    }
-  }, [filters, activeFilter]);
 
   // Slug'a göre tema class'ı seç
   const themeClass =
     PAGE_THEME_CLASS[kategoriSlug] ?? styles.pageThemeDersAkademi;
+
+  // Alt kategorileri yükle (ana_kategori_id ile)
+  useEffect(() => {
+    const loadAltCategories = async () => {
+      if (!anaKategoriId) {
+        setCategoryError("Ana kategori bulunamadı");
+        setAltCategories([]);
+        setKategoriId(null);
+        setSelectedAltCategoryId(null);
+        return;
+      }
+
+      setLoadingCategories(true);
+      setCategoryError(null);
+      try {
+        const items = await fetchCategories(anaKategoriId);
+        setAltCategories(items);
+        
+        // İlk alt kategoriyi otomatik seç (sadece yeni yüklemede)
+        if (items.length > 0) {
+          const firstCategory = items[0];
+          setSelectedAltCategoryId(firstCategory.kategori_id);
+          setKategoriId(firstCategory.kategori_id);
+        } else {
+          setCategoryError("Bu kategori için alt kategori bulunamadı");
+          setKategoriId(null);
+          setSelectedAltCategoryId(null);
+        }
+      } catch (err: any) {
+        const msg =
+          err?.response?.data?.message || "Kategoriler yüklenirken bir hata oluştu.";
+        setCategoryError(msg);
+        setAltCategories([]);
+        setKategoriId(null);
+        setSelectedAltCategoryId(null);
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+    
+    loadAltCategories();
+  }, [anaKategoriId, kategoriSlug]);
+
+  // selectedAltCategoryId değiştiğinde kategoriId'yi güncelle
+  useEffect(() => {
+    if (selectedAltCategoryId) {
+      setKategoriId(selectedAltCategoryId);
+    }
+  }, [selectedAltCategoryId]);
+
+  // Soruları yükle (kategori_id bulunduğunda)
+  const loadQuestions = useCallback(async () => {
+    if (!kategoriId) {
+      setQuestions([]);
+      return;
+    }
+    
+    setLoadingQuestions(true);
+    setQuestionsError(null);
+    try {
+      const items = await fetchQuestions(kategoriId);
+      setQuestions(items);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message || "Sorular yüklenirken bir hata oluştu.";
+      setQuestionsError(msg);
+    } finally {
+      setLoadingQuestions(false);
+    }
+  }, [kategoriId]);
+
+  useEffect(() => {
+    loadQuestions();
+  }, [loadQuestions]);
+
+  const resolveUserId = (): number | null => {
+    try {
+      const stored = localStorage.getItem("kampusxUser");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.id) return Number(parsed.id);
+      }
+    } catch (err) {
+      console.error("Kullanıcı bilgisi okunamadı:", err);
+    }
+    return null;
+  };
+
+  const handleOpenModal = () => {
+    // Kullanıcı kontrolü - localStorage'dan kontrol et
+    try {
+      const stored = localStorage.getItem("kampusxUser");
+      if (!stored) {
+        // Kullanıcı giriş yapmamış - toast göster
+        setToastMessage("Soru sormak için giriş yapmalısın.");
+        setShowToast(true);
+        return;
+      }
+      // JSON parse kontrolü
+      const parsed = JSON.parse(stored);
+      if (!parsed || !parsed.id) {
+        setToastMessage("Soru sormak için giriş yapmalısın.");
+        setShowToast(true);
+        return;
+      }
+    } catch (err) {
+      // Parse hatası - kullanıcı yok say
+      setToastMessage("Soru sormak için giriş yapmalısın.");
+      setShowToast(true);
+      return;
+    }
+    
+    // Kullanıcı giriş yapmış - modal aç
+    setModalOpen(true);
+  };
+
+  const handleCreateQuestion = async (payload: {
+    baslik: string;
+    soru_metin: string;
+    kategori_id: number;
+    etiketler?: string[];
+  }) => {
+    // Kullanıcı kontrolü
+    const userId = resolveUserId();
+    if (!userId || !user) {
+      setCreateError("Soru sormak için giriş yapmalısın");
+      setModalOpen(false);
+      navigate("/auth");
+      return;
+    }
+
+    if (!payload.kategori_id) {
+      setCreateError("Kategori seçilmelidir");
+      return;
+    }
+    
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const newItem = await createQuestion({
+        kategori_id: payload.kategori_id,
+        kullanici_id: userId,
+        baslik: payload.baslik,
+        soru_metin: payload.soru_metin,
+        etiketler: payload.etiketler,
+      });
+      setQuestions((prev) => [newItem, ...prev]);
+      setModalOpen(false);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message || err?.message || "Soru gönderilirken hata oluştu.";
+      setCreateError(msg);
+    } finally {
+      setCreating(false);
+    }
+  };
 
   // Tüm kategoriler için aynı layout
   return (
     <div
       className={`${styles.page} ${styles.pageBackground} ${themeClass} ${styles.fadeInUp}`}
     >
-      <Header user={null} />
+      <Header />
 
       <main className={styles.content}>
         {/* Üstte alt kategori butonları - sadece template gösteriliyorsa */}
-        {!shouldHideTemplate && filters.length > 0 && (
+        {!shouldHideTemplate && altCategories.length > 0 && (
           <div className={styles.filterChips}>
-            {filters.map((filter) => (
+            {altCategories.map((category) => (
+              <button
+                key={category.kategori_id}
+                className={`${styles.filterChip} ${
+                  category.kategori_id === selectedAltCategoryId ? styles.filterChipActive : ""
+                } ${styles.chipHoverGlow}`}
+                onClick={() => {
+                  setSelectedAltCategoryId(category.kategori_id);
+                  setKategoriId(category.kategori_id);
+                }}
+              >
+                {category.kategori_adi}
+              </button>
+            ))}
+          </div>
+        )}
+        
+        {/* Fallback: DB'den gelmezse eski filtreler */}
+        {!shouldHideTemplate && altCategories.length === 0 && !loadingCategories && CATEGORY_FILTERS_FALLBACK[kategoriSlug] && (
+          <div className={styles.filterChips}>
+            {CATEGORY_FILTERS_FALLBACK[kategoriSlug].map((filter) => (
               <button
                 key={filter}
-                className={`${styles.filterChip} ${
-                  filter === activeFilter ? styles.filterChipActive : ""
-                } ${styles.chipHoverGlow}`}
-                onClick={() => setActiveFilter(filter)}
+                className={`${styles.filterChip} ${styles.chipHoverGlow}`}
+                disabled
               >
                 {filter}
               </button>
@@ -121,15 +312,42 @@ export default function CategoryPage() {
                   ❓
                 </span>
                 <span className={styles.cardTitle}>soru cevap</span>
-                <span className={styles.cardBadge}>12 soru</span>
+                <span className={styles.cardBadge}>
+                  {questions.length} soru
+                </span>
+                <button
+                  type="button"
+                  className={questionStyles.openButton}
+                  onClick={handleOpenModal}
+                  disabled={!kategoriId || loadingCategories || !user}
+                  title={!user ? "Giriş yapman gerekiyor" : ""}
+                >
+                  Soru Aç
+                </button>
               </div>
               <div className={styles.cardBody}>
-                <p className={styles.cardText}>
-                  Henüz soru yok. İlk soruyu sen sor! 👀
-                </p>
-                <p className={styles.cardSubText}>
-                  Yardım istediğin dersleri, konuları veya kaynakları paylaşabilirsin.
-                </p>
+                {categoryError ? (
+                  <p className={styles.cardText} style={{ color: "#ff6b6b" }}>
+                    {categoryError}
+                  </p>
+                ) : (
+                  <QuestionList
+                    questions={questions}
+                    loading={loadingQuestions || loadingCategories}
+                    error={questionsError}
+                    onQuestionDeleted={(questionId) => {
+                      setQuestions((prev) => prev.filter((q) => q.soru_id !== questionId));
+                    }}
+                    onQuestionClick={(questionId) => {
+                      setScrollToAnswers(false);
+                      setSelectedQuestionId(questionId);
+                    }}
+                    onViewAnswers={(questionId) => {
+                      setScrollToAnswers(true);
+                      setSelectedQuestionId(questionId);
+                    }}
+                  />
+                )}
               </div>
             </section>
 
@@ -158,6 +376,35 @@ export default function CategoryPage() {
           </div>
         )}
       </main>
+      <NewQuestionModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSubmit={handleCreateQuestion}
+        loading={creating}
+        error={createError}
+        categories={altCategories}
+      />
+      <Toast
+        message={toastMessage || ""}
+        show={showToast}
+        duration={3000}
+        onClose={() => {
+          setShowToast(false);
+          setToastMessage(null);
+        }}
+      />
+      <QuestionDetailModal
+        questionId={selectedQuestionId}
+        onClose={() => {
+          setSelectedQuestionId(null);
+          setScrollToAnswers(false);
+        }}
+        scrollToAnswers={scrollToAnswers}
+        onAnswerCreated={() => {
+          // Cevap eklendiğinde soruları yeniden yükle
+          loadQuestions();
+        }}
+      />
     </div>
   );
 }

@@ -1,0 +1,24 @@
+/* Page Transition Animations */
+.pageTransition {
+  width: 100%;
+  min-height: 100%;
+  /* 300ms süre, ease-out easing - kullanıcıyı yormayan modern geçiş */
+  transition: opacity 300ms ease-out, transform 300ms ease-out;
+  /* Animasyon performansı için GPU hızlandırması */
+  will-change: opacity, transform;
+}
+
+.pageTransitionHidden {
+  opacity: 0;
+  transform: translateY(8px);
+  /* Pointer events'i kapatarak animasyon sırasında tıklamaları engelle */
+  pointer-events: none;
+}
+
+.pageTransitionVisible {
+  opacity: 1;
+  transform: translateY(0);
+  /* Animasyon bittikten sonra pointer events'i aç */
+  pointer-events: auto;
+}
+
