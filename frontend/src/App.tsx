@@ -5,6 +5,10 @@ import AuthPage from "./features/auth/pages/AuthPage";
 import CategoryPage from "./features/categories/CategoryPage";
 import CommunityRulesPage from "./features/pages/CommunityRulesPage";
 import HakkimizdaPage from "./features/pages/HakkimizdaPage";
+import BildirimPage from "./features/bildirim/pages/BildirimPage";
+
+
+
 
 function App() {
   return (
@@ -15,6 +19,8 @@ function App() {
         <Route path="/kategori/:slug" element={<CategoryPage />} />
         <Route path="/topluluk-kurallari" element={<CommunityRulesPage />} />
         <Route path="/hakkimizda" element={<HakkimizdaPage />} />
+         <Route path="/bildirimler" element={<BildirimPage />} />
+
       </Routes>
     </BrowserRouter>
   );
