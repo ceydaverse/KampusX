@@ -48,7 +48,7 @@ export async function getAnswersByQuestionId(
       c.kullanici_id,
       c.cevap_metin,
       c.tarih,
-      COUNT(DISTINCT cb.kullanici_id) AS likeCount,
+      ISNULL(cb.likeCount, 0) AS likeCount,
       k.kullanici_id AS author_id,
       k.kullanici_adi AS author_username,
       k.ad AS author_ad,
@@ -61,7 +61,7 @@ export async function getAnswersByQuestionId(
     request.input('current_user_id', sql.Int, currentUserId);
     query += `,
       CASE 
-        WHEN EXISTS(SELECT 1 FROM dbo.CevapBegeniler WHERE cevap_id = c.cevap_id AND kullanici_id = @current_user_id) 
+        WHEN EXISTS(SELECT 1 FROM Sosyal.CevapBegeniler WHERE cevap_id = c.cevap_id AND kullanici_id = @current_user_id) 
         THEN 1 
         ELSE 0 
       END AS isLikedByMe
@@ -72,7 +72,7 @@ export async function getAnswersByQuestionId(
 
   query += `
     FROM Forum.Cevaplar c
-    LEFT JOIN dbo.CevapBegeniler cb ON c.cevap_id = cb.cevap_id
+    LEFT JOIN (SELECT cevap_id, COUNT(*) AS likeCount FROM Sosyal.CevapBegeniler GROUP BY cevap_id) cb ON c.cevap_id = cb.cevap_id
     LEFT JOIN dbo.Kullanicilar k ON c.kullanici_id = k.kullanici_id
     WHERE c.soru_id = @soru_id
     GROUP BY 
@@ -86,7 +86,8 @@ export async function getAnswersByQuestionId(
       k.ad,
       k.soyad,
       k.universite,
-      k.bolum
+      k.bolum,
+      cb.likeCount
     ORDER BY c.tarih ASC
   `;
 

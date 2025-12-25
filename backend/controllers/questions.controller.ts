@@ -37,8 +37,19 @@ export async function handleGetQuestions(req: Request, res: Response) {
     const items = await getQuestionsByCategoryId(Number(kategoriId), currentUserId || undefined);
     return res.json({ success: true, items });
   } catch (err: any) {
+    console.error('SQL ERROR (GET QUESTIONS):', {
+      message: err?.message,
+      code: err?.code || err?.number,
+      original: err?.originalError?.message,
+    });
     const message = err?.message || 'Sorular getirilirken hata oluştu';
-    return res.status(500).json({ success: false, message });
+    return res.status(500).json({ 
+      success: false, 
+      message,
+      ...(process.env.NODE_ENV !== 'production' && {
+        detail: err?.originalError?.message || err?.message,
+      }),
+    });
   }
 }
 

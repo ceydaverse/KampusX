@@ -17,7 +17,7 @@ export async function toggleQuestionLike(
     .input('kullanici_id', sql.Int, kullaniciId)
     .query(`
       SELECT 1 
-      FROM dbo.SoruBegeniler 
+      FROM Sosyal.SoruBegeniler 
       WHERE soru_id = @soru_id AND kullanici_id = @kullanici_id
     `);
 
@@ -30,7 +30,7 @@ export async function toggleQuestionLike(
       .input('soru_id', sql.Int, soruId)
       .input('kullanici_id', sql.Int, kullaniciId)
       .query(`
-        DELETE FROM dbo.SoruBegeniler 
+        DELETE FROM Sosyal.SoruBegeniler 
         WHERE soru_id = @soru_id AND kullanici_id = @kullanici_id
       `);
   } else {
@@ -40,7 +40,7 @@ export async function toggleQuestionLike(
       .input('soru_id', sql.Int, soruId)
       .input('kullanici_id', sql.Int, kullaniciId)
       .query(`
-        INSERT INTO dbo.SoruBegeniler (soru_id, kullanici_id, tarih)
+        INSERT INTO Sosyal.SoruBegeniler (soru_id, kullanici_id, tarih)
         VALUES (@soru_id, @kullanici_id, GETDATE())
       `);
 
@@ -68,7 +68,7 @@ export async function toggleQuestionLike(
     .input('soru_id', sql.Int, soruId)
     .query(`
       SELECT COUNT(*) AS likeCount 
-      FROM dbo.SoruBegeniler 
+      FROM Sosyal.SoruBegeniler 
       WHERE soru_id = @soru_id
     `);
 
@@ -96,7 +96,7 @@ export async function toggleAnswerLike(
     .input('kullanici_id', sql.Int, kullaniciId)
     .query(`
       SELECT 1 
-      FROM dbo.CevapBegeniler 
+      FROM Sosyal.CevapBegeniler 
       WHERE cevap_id = @cevap_id AND kullanici_id = @kullanici_id
     `);
 
@@ -109,7 +109,7 @@ export async function toggleAnswerLike(
       .input('cevap_id', sql.Int, cevapId)
       .input('kullanici_id', sql.Int, kullaniciId)
       .query(`
-        DELETE FROM dbo.CevapBegeniler 
+        DELETE FROM Sosyal.CevapBegeniler 
         WHERE cevap_id = @cevap_id AND kullanici_id = @kullanici_id
       `);
   } else {
@@ -119,7 +119,7 @@ export async function toggleAnswerLike(
       .input('cevap_id', sql.Int, cevapId)
       .input('kullanici_id', sql.Int, kullaniciId)
       .query(`
-        INSERT INTO dbo.CevapBegeniler (cevap_id, kullanici_id, tarih)
+        INSERT INTO Sosyal.CevapBegeniler (cevap_id, kullanici_id, tarih)
         VALUES (@cevap_id, @kullanici_id, GETDATE())
       `);
 
@@ -154,7 +154,7 @@ export async function toggleAnswerLike(
     .input('cevap_id', sql.Int, cevapId)
     .query(`
       SELECT COUNT(*) AS likeCount 
-      FROM dbo.CevapBegeniler 
+      FROM Sosyal.CevapBegeniler 
       WHERE cevap_id = @cevap_id
     `);
 
@@ -183,7 +183,7 @@ export async function getLikedQuestionsByUserId(kullaniciId: number): Promise<an
         s.tarih,
         s.kategori_id,
         sb.tarih AS begeni_tarihi
-      FROM dbo.SoruBegeniler sb
+      FROM Sosyal.SoruBegeniler sb
       INNER JOIN Forum.Sorular s ON sb.soru_id = s.soru_id
       WHERE sb.kullanici_id = @kullanici_id
       ORDER BY sb.tarih DESC
@@ -215,7 +215,7 @@ export async function getLikedAnswersByUserId(kullaniciId: number): Promise<any[
         c.tarih,
         c.soru_id,
         cb.tarih AS begeni_tarihi
-      FROM dbo.CevapBegeniler cb
+      FROM Sosyal.CevapBegeniler cb
       INNER JOIN Forum.Cevaplar c ON cb.cevap_id = c.cevap_id
       WHERE cb.kullanici_id = @kullanici_id
       ORDER BY cb.tarih DESC

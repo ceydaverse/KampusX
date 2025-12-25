@@ -32,20 +32,19 @@ export async function handleGetGroups(req: Request, res: Response) {
       items: groups,
     });
   } catch (err: any) {
-    console.error('GET GROUPS ERROR', {
+    console.error('SQL ERROR (GET GROUPS):', {
       userId: req.query.userId,
-      message: err.message,
-      code: err.code,
-      original: err.originalError?.message,
-      stack: err.stack,
-      fullError: err,
+      message: err?.message,
+      code: err?.code || err?.number,
+      original: err?.originalError?.message,
+      stack: err?.stack,
     });
     
     return res.status(500).json({
       success: false,
       message: 'Gruplar getirilirken hata oluştu',
       ...(process.env.NODE_ENV !== 'production' && {
-        details: err.originalError?.message || err.message,
+        detail: err?.originalError?.message || err?.message,
       }),
     });
   }

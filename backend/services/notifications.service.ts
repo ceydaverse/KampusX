@@ -121,12 +121,12 @@ export async function getNotificationsByUserId(
         SELECT c.kullanici_id FROM Forum.Cevaplar c WHERE c.cevap_id = b.cevap_id
       ))
       OR (b.tip = 'soru_begeni' AND k.kullanici_id IN (
-        SELECT sb.kullanici_id FROM dbo.SoruBegeniler sb 
+        SELECT sb.kullanici_id FROM Sosyal.SoruBegeniler sb 
         WHERE sb.soru_id = b.soru_id AND sb.kullanici_id != b.kullanici_id
         ORDER BY sb.tarih DESC
       ))
       OR (b.tip = 'cevap_begeni' AND k.kullanici_id IN (
-        SELECT cb.kullanici_id FROM dbo.CevapBegeniler cb 
+        SELECT cb.kullanici_id FROM Sosyal.CevapBegeniler cb 
         WHERE cb.cevap_id = b.cevap_id AND cb.kullanici_id != b.kullanici_id
         ORDER BY cb.tarih DESC
       ))

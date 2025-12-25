@@ -110,7 +110,7 @@ export async function getQuestionsByCategoryId(
       s.soru_metin,
       s.tarih,
       s.etiketler,
-      COUNT(DISTINCT sb.kullanici_id) AS likeCount,
+      ISNULL(sb.likeCount, 0) AS likeCount,
       k.kullanici_id AS author_id,
       k.kullanici_adi AS author_username,
       k.ad AS author_ad,
@@ -123,7 +123,7 @@ export async function getQuestionsByCategoryId(
     request.input('current_user_id', sql.Int, currentUserId);
     query += `,
       CASE 
-        WHEN EXISTS(SELECT 1 FROM dbo.SoruBegeniler WHERE soru_id = s.soru_id AND kullanici_id = @current_user_id) 
+        WHEN EXISTS(SELECT 1 FROM Sosyal.SoruBegeniler WHERE soru_id = s.soru_id AND kullanici_id = @current_user_id) 
         THEN 1 
         ELSE 0 
       END AS isLikedByMe
@@ -134,7 +134,7 @@ export async function getQuestionsByCategoryId(
 
   query += `
     FROM Forum.Sorular s
-    LEFT JOIN dbo.SoruBegeniler sb ON s.soru_id = sb.soru_id
+    LEFT JOIN (SELECT soru_id, COUNT(*) AS likeCount FROM Sosyal.SoruBegeniler GROUP BY soru_id) sb ON s.soru_id = sb.soru_id
     LEFT JOIN dbo.Kullanicilar k ON s.kullanici_id = k.kullanici_id
     WHERE s.kategori_id = @kategori_id
     GROUP BY 
@@ -150,7 +150,8 @@ export async function getQuestionsByCategoryId(
       k.ad,
       k.soyad,
       k.universite,
-      k.bolum
+      k.bolum,
+      sb.likeCount
     ORDER BY s.tarih DESC
   `;
 
@@ -213,7 +214,7 @@ export async function getQuestionById(
       s.soru_metin,
       s.tarih,
       s.etiketler,
-      COUNT(DISTINCT sb.kullanici_id) AS likeCount,
+      ISNULL(sb.likeCount, 0) AS likeCount,
       k.kullanici_id AS author_id,
       k.kullanici_adi AS author_username,
       k.ad AS author_ad,
@@ -226,7 +227,7 @@ export async function getQuestionById(
     request.input('current_user_id', sql.Int, currentUserId);
     query += `,
       CASE 
-        WHEN EXISTS(SELECT 1 FROM dbo.SoruBegeniler WHERE soru_id = s.soru_id AND kullanici_id = @current_user_id) 
+        WHEN EXISTS(SELECT 1 FROM Sosyal.SoruBegeniler WHERE soru_id = s.soru_id AND kullanici_id = @current_user_id) 
         THEN 1 
         ELSE 0 
       END AS isLikedByMe
@@ -237,7 +238,7 @@ export async function getQuestionById(
 
   query += `
     FROM Forum.Sorular s
-    LEFT JOIN dbo.SoruBegeniler sb ON s.soru_id = sb.soru_id
+    LEFT JOIN (SELECT soru_id, COUNT(*) AS likeCount FROM Sosyal.SoruBegeniler GROUP BY soru_id) sb ON s.soru_id = sb.soru_id
     LEFT JOIN dbo.Kullanicilar k ON s.kullanici_id = k.kullanici_id
     WHERE s.soru_id = @soru_id
     GROUP BY 
@@ -253,7 +254,8 @@ export async function getQuestionById(
       k.ad,
       k.soyad,
       k.universite,
-      k.bolum
+      k.bolum,
+      sb.likeCount
   `;
 
   const result = await request.query(query);
