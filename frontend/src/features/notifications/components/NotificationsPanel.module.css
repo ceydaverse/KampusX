@@ -1,0 +1,126 @@
+.panel {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: 380px;
+  max-height: 500px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #e9ecef;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e9ecef;
+  background: #ffffff;
+  flex-shrink: 0;
+}
+
+.panelTitle {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.markAllButton {
+  background: none;
+  border: none;
+  color: #667eea;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+}
+
+.markAllButton:hover {
+  background: #f8f9fa;
+}
+
+.panelContent {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.loadingState,
+.emptyState {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.notificationList {
+  display: flex;
+  flex-direction: column;
+}
+
+.notificationItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  position: relative;
+}
+
+.notificationItem:hover {
+  background: #f8f9fa;
+}
+
+.notificationItemUnread {
+  background: #f0f7ff;
+  font-weight: 500;
+}
+
+.notificationItemUnread:hover {
+  background: #e6f2ff;
+}
+
+.notificationContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.notificationMessage {
+  margin: 0 0 6px 0;
+  font-size: 0.9rem;
+  color: #1a1a1a;
+  line-height: 1.4;
+}
+
+.notificationTime {
+  font-size: 0.75rem;
+  color: #6c757d;
+}
+
+.unreadDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #667eea;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+
+
+
+
+
+
+
+

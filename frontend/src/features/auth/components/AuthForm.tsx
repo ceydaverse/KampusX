@@ -1,6 +1,9 @@
-import React, { useState } from "react";
-import axios from "axios";
-import { useNavigate } from "react-router-dom";   // ✅ eklendi
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { login, register, type ApiUser, type AuthResponse } from "../authApi";
+import { useAuth } from "../AuthProvider";
+import { saveToken } from "../authStorage";
+
 import "../styles/auth.css";
 
 interface AuthFormProps {
@@ -8,15 +11,6 @@ interface AuthFormProps {
   onTabChange?: (tab: "login" | "register") => void;
 }
 
-interface ApiUser {
-  id: number;
-  ad: string;
-  soyad: string;
-  email: string;
-  universite?: string | null;
-  bolum?: string | null;
-  cinsiyet?: string | null;
-}
 
 /**
  * AuthForm Component
@@ -37,15 +31,24 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const navigate = useNavigate();                    // ✅ eklendi
+  const navigate = useNavigate();
+  const { login: loginUser } = useAuth();
+
+  // ✅ redirect paramını oku (/auth?redirect=/kategori/ders-akademi)
+  const [searchParams] = useSearchParams();
+  const redirectTo = useMemo(() => {
+    const r = searchParams.get("redirect");
+    // güvenlik: sadece relative path kabul et
+    return r && r.startsWith("/") ? r : "/";
+  }, [searchParams]);
+
   const isRegister = activeTab === "register";
 
   // "Ad Soyad"ı ikiye bölmek için helper
   const splitName = (name: string): { ad: string; soyad: string } => {
-    const parts = name.trim().split(" ");
-    if (parts.length === 1) {
-      return { ad: parts[0], soyad: "" };
-    }
+    const parts = name.trim().split(" ").filter(Boolean);
+    if (parts.length === 0) return { ad: "", soyad: "" };
+    if (parts.length === 1) return { ad: parts[0], soyad: "" };
     const ad = parts[0];
     const soyad = parts.slice(1).join(" ");
     return { ad, soyad };
@@ -60,7 +63,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
     }));
   };
 
-  // Form submit handler (BURADA backend çağrısı var)
+  // Form submit handler (backend çağrısı burada)
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
@@ -89,11 +92,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
         // ----------- KAYIT OL -----------
         const { ad, soyad } = splitName(formData.fullName);
 
-        const response = await axios.post<{
-          success: boolean;
-          user?: ApiUser;
-          message?: string;
-        }>("http://localhost:5000/api/auth/register", {
+        const response = await register({
           ad,
           soyad,
           email: formData.email,
@@ -105,7 +104,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
           dogum_yili: null,
         });
 
-        if (response.data.success) {
+        if (response.success) {
           setSuccessMessage("Kayıt başarılı! Artık giriş yapabilirsiniz.");
 
           // ✅ Login tabına geç
@@ -114,40 +113,39 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
           // ✅ Popup göster
           alert("Kayıt başarılı! Şimdi email ve şifrenizle giriş yapabilirsiniz.");
         } else {
-          setError(response.data.message || "Kayıt başarısız.");
+          setError(response.message || "Kayıt başarısız.");
         }
       } else {
         // ----------- GİRİŞ YAP -----------
-        const response = await axios.post<{
-          success: boolean;
-          user?: ApiUser;
-          message?: string;
-        }>("http://localhost:5000/api/auth/login", {
+        const response = await login({
           email: formData.email,
           password: formData.password,
         });
 
-        if (response.data.success && response.data.user) {
-          const user = response.data.user;
+        if (response.success && response.user) {
+          const user = response.user;
+
+          // ✅ Token varsa kaydet (opsiyonel)
+          if (response.token) {
+            saveToken(response.token);
+          }
+
+          // ✅ AuthProvider state'ini güncelle (Header'da görünmesi için)
+          loginUser(user);
 
           setSuccessMessage(`Hoş geldin ${user.ad} ${user.soyad}!`);
-
-          // ✅ İstersen localStorage'da sakla
-          localStorage.setItem("kampusxUser", JSON.stringify(user));
 
           // ✅ Popup göster
           alert(`Hoş geldin ${user.ad} ${user.soyad}!`);
 
-          // ✅ Anasayfaya yönlendir (route'un neyse ona göre değiştir)
-          navigate("/"); // örn: "/main" veya "/home" yapabilirsin
+          // ✅ Geldiğin sayfaya geri dön (redirect)
+          navigate(redirectTo, { replace: true });
         } else {
-          setError(response.data.message || "Giriş başarısız.");
+          setError(response.message || "Giriş başarısız.");
         }
       }
     } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ||
-        "Sunucuya bağlanırken bir hata oluştu.";
+      const msg = err?.message || "Sunucuya bağlanırken bir hata oluştu.";
       setError(msg);
     } finally {
       setLoading(false);
@@ -155,7 +153,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
   };
 
   // Tab değiştiğinde form'u sıfırla
-  React.useEffect(() => {
+  useEffect(() => {
     setFormData({
       fullName: "",
       email: "",

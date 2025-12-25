@@ -1,23 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../../features/auth/AuthProvider";
 import styles from "./Header.module.css";
 
-// MainLayout'tan gelecek user tipi
-interface ApiUser {
-  id: number;
-  ad: string;
-  soyad: string;
-  email: string;
-  universite?: string | null;
-  bolum?: string | null;
-  cinsiyet?: string | null;
-}
-
-interface HeaderProps {
-  user: ApiUser | null;
-}
-
-const Header: React.FC<HeaderProps> = ({ user }) => {
+const Header: React.FC = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [isScrolled, setIsScrolled] = useState(false);
 
