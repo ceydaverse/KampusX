@@ -27,7 +27,7 @@ export const MessageList: React.FC<MessageListProps> = ({
     let lastDate: Date | null = null;
 
     messages.forEach((message) => {
-      const messageDate = new Date(message.tarih);
+      const messageDate = new Date(message.sentAt);
       const dateStr = messageDate.toDateString();
 
       if (!lastDate || lastDate.toDateString() !== dateStr) {
@@ -100,12 +100,12 @@ export const MessageList: React.FC<MessageListProps> = ({
         }
 
         const message = item as GroupMessage;
-        const isOwn = message.gonderen_id === currentUserId;
-        const senderName = memberNames[message.gonderen_id] || `Kullanıcı ${message.gonderen_id}`;
+        const isOwn = message.senderId === currentUserId;
+        const senderName = memberNames[message.senderId] || `Kullanıcı ${message.senderId}`;
 
         return (
           <MessageBubble
-            key={message.mesaj_id}
+            key={message.messageId}
             message={message}
             isOwn={isOwn}
             senderName={!isOwn ? senderName : undefined}

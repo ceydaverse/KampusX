@@ -11,7 +11,7 @@ import styles from "../questions.module.css";
 interface QuestionDetailModalProps {
   questionId: number | null;
   onClose: () => void;
-  onAnswerCreated?: () => void;
+  onAnswerCreated?: (questionId: number) => void;
   scrollToAnswers?: boolean;
 }
 
@@ -162,7 +162,7 @@ export const QuestionDetailModal: React.FC<QuestionDetailModalProps> = ({
       });
       setAnswerText("");
       await loadQuestionAndAnswers();
-      onAnswerCreated?.();
+      onAnswerCreated?.(questionId);
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || "Cevap gönderilirken hata oluştu";
       setToastMessage(msg);

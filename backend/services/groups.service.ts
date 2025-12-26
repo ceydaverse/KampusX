@@ -1,6 +1,49 @@
 import { getPool, sql } from '../db';
 import { T } from '../constants/tables';
 
+// Grup_Mesaj_Okunma tablosunun kolon adlarını keşfet (ilk çalıştırmada)
+// DB şeması: mesaj_id, kullanici_id, okuma_tarihi (okundu kolonu yok)
+let grupMesajOkunmaColumns: { mesaj_id: string; kullanici_id: string; okuma_tarihi: string } | null = null;
+
+async function discoverGrupMesajOkunmaColumns(): Promise<{ mesaj_id: string; kullanici_id: string; okuma_tarihi: string }> {
+  if (grupMesajOkunmaColumns) return grupMesajOkunmaColumns;
+
+  const pool = await getPool();
+  const result = await pool.request().query(`
+    SELECT c.name 
+    FROM sys.columns c
+    JOIN sys.tables t ON t.object_id = c.object_id
+    WHERE t.name = 'Grup_Mesaj_Okunma'
+    ORDER BY c.column_id
+  `);
+
+  const columnNames = result.recordset.map((r: any) => r.name);
+  console.log('[Grup_Mesaj_Okunma] Tablo kolonları:', columnNames);
+
+  // Kolon adlarını eşleştir (muhtemel isimler)
+  const mesajIdCol = columnNames.find((n: string) => 
+    n.toLowerCase() === 'mesaj_id' || n.toLowerCase() === 'mesajid'
+  ) || 'mesaj_id';
+  
+  const kullaniciIdCol = columnNames.find((n: string) => 
+    n.toLowerCase() === 'kullanici_id' || n.toLowerCase() === 'kullaniciid'
+  ) || 'kullanici_id';
+  
+  const okumaTarihiCol = columnNames.find((n: string) => 
+    n.toLowerCase() === 'okuma_tarihi' || n.toLowerCase() === 'okumatarihi' || 
+    n.toLowerCase() === 'okundu_tarihi' || n.toLowerCase() === 'okunma_tarihi'
+  ) || 'okuma_tarihi';
+
+  grupMesajOkunmaColumns = {
+    mesaj_id: mesajIdCol,
+    kullanici_id: kullaniciIdCol,
+    okuma_tarihi: okumaTarihiCol,
+  };
+
+  console.log('[Grup_Mesaj_Okunma] Kullanılan kolon eşlemeleri:', grupMesajOkunmaColumns);
+  return grupMesajOkunmaColumns;
+}
+
 export interface Group {
   grup_id: number;
   grup_adi: string;
@@ -17,6 +60,9 @@ export interface GroupMessage {
   gonderen_id: number;
   mesaj: string;
   tarih: Date;
+  gonderen_kullanici_adi?: string | null;
+  okuyan_sayisi?: number;
+  benim_okudum?: boolean;
 }
 
 export interface GroupMember {
@@ -27,11 +73,17 @@ export interface GroupMember {
 }
 
 /**
- * Kullanıcının üye olduğu grupları getir
+ * Kullanıcının üye olduğu grupları getir (unread count, lastMessage, memberCount ile)
  */
 export async function getGroupsByUserId(userId: number): Promise<Group[]> {
   const pool = await getPool();
 
+  // Grup_Mesaj_Okunma tablosunun kolon adlarını keşfet
+  const cols = await discoverGrupMesajOkunmaColumns();
+
+  console.log('[getGroupsByUserId] userId:', userId);
+
+  // Unread count, lastMessage, memberCount hesaplama
   const result = await pool
     .request()
     .input('userId', sql.Int, userId)
@@ -39,40 +91,86 @@ export async function getGroupsByUserId(userId: number): Promise<Group[]> {
       SELECT
         g.grup_id,
         g.grup_adi,
+        g.olusturan_kullanici,
+        g.olusturma_tarihi,
+        -- Member count
+        ISNULL((
+          SELECT COUNT(*)
+          FROM ${T.GrupUyeler} gu_count
+          WHERE gu_count.grup_id = g.grup_id
+        ), 0) AS memberCount,
+        -- Last message (OUTER APPLY ile - birden fazla kolon alabiliriz)
         lm.mesaj AS lastMessageText,
-        lm.tarih AS lastMessageAt,
-        ISNULL(uc.unreadCount, 0) AS unreadCount
+        lm.gonderim_tarihi AS lastMessageDate,
+        lm.gonderen_kullanici AS lastMessageSenderId,
+        -- Unread count: Okunmamış mesaj sayısı
+        ISNULL((
+          SELECT COUNT(*)
+          FROM ${T.GrupMesajlar} gm
+          WHERE gm.grup_id = g.grup_id
+            AND gm.gonderen_kullanici != @userId  -- Gönderen kendisi değilse
+            AND NOT EXISTS (
+              SELECT 1
+              FROM ${T.GrupMesajOkunma} gmo
+              WHERE gmo.[${cols.mesaj_id}] = gm.mesaj_id
+                AND gmo.[${cols.kullanici_id}] = @userId
+                AND gmo.[${cols.okuma_tarihi}] IS NOT NULL
+            )
+        ), 0) AS unreadCount
       FROM ${T.Gruplar} g
-      INNER JOIN ${T.GrupUyeler} gu ON gu.grup_id = g.grup_id
+      INNER JOIN ${T.GrupUyeler} gu ON gu.grup_id = g.grup_id AND gu.kullanici_id = @userId
+      -- Last message için OUTER APPLY (mesaj yoksa NULL) - alias çakışmasını önlemek için farklı alias kullan
       OUTER APPLY (
-        SELECT TOP 1 gm.mesaj, gm.tarih
-        FROM ${T.GrupMesajlar} gm
-        WHERE gm.grup_id = g.grup_id
-        ORDER BY gm.tarih DESC
-      ) lm
-      OUTER APPLY (
-        SELECT COUNT(*) AS unreadCount
-        FROM ${T.GrupMesajOkunma} gmo
-        INNER JOIN ${T.GrupMesajlar} gm2 ON gm2.mesaj_id = gmo.mesaj_id
-        WHERE gm2.grup_id = g.grup_id
-          AND gmo.kullanici_id = @userId
-          AND gmo.okundu = 0
-      ) uc
-      WHERE gu.kullanici_id = @userId
-      ORDER BY lm.tarih DESC
+        SELECT TOP 1
+          last_mesaj.mesaj,
+          last_mesaj.gonderim_tarihi,
+          last_mesaj.gonderen_kullanici
+        FROM ${T.GrupMesajlar} last_mesaj
+        WHERE last_mesaj.grup_id = g.grup_id
+        ORDER BY last_mesaj.gonderim_tarihi DESC
+      ) AS lm
+      WHERE 1=1
+      ORDER BY g.olusturma_tarihi DESC
     `);
 
-  return result.recordset.map((row: any) => ({
-    grup_id: row.grup_id,
-    grup_adi: row.grup_adi,
-    lastMessage: row.lastMessageText
-      ? {
-          mesaj: row.lastMessageText,
-          tarih: row.lastMessageAt ? new Date(row.lastMessageAt) : new Date(),
-        }
-      : null,
-    unreadCount: Number(row.unreadCount) || 0,
-  }));
+  return result.recordset.map((row: any) => {
+    // Last message parse et (OUTER APPLY ile doğrudan kolonlar geliyor)
+    let lastMessage: { mesaj: string; tarih: Date; gonderen_kullanici: number } | null = null;
+    if (row.lastMessageText) {
+      lastMessage = {
+        mesaj: String(row.lastMessageText || ''),
+        tarih: new Date(row.lastMessageDate),
+        gonderen_kullanici: Number(row.lastMessageSenderId),
+      };
+    }
+
+    return {
+      grup_id: row.grup_id,
+      grup_adi: row.grup_adi,
+      lastMessage,
+      unreadCount: Number(row.unreadCount) || 0,
+      memberCount: Number(row.memberCount) || 0,
+    };
+  });
+}
+
+/**
+ * Kullanıcının grubun üyesi olup olmadığını kontrol et
+ */
+export async function isUserGroupMember(grupId: number, kullaniciId: number): Promise<boolean> {
+  const pool = await getPool();
+
+  const result = await pool
+    .request()
+    .input('grup_id', sql.Int, grupId)
+    .input('kullanici_id', sql.Int, kullaniciId)
+    .query(`
+      SELECT 1
+      FROM ${T.GrupUyeler}
+      WHERE grup_id = @grup_id AND kullanici_id = @kullanici_id
+    `);
+
+  return result.recordset.length > 0;
 }
 
 /**
@@ -81,19 +179,49 @@ export async function getGroupsByUserId(userId: number): Promise<Group[]> {
 export async function getGroupMessages(
   grupId: number,
   limit: number = 50,
-  before?: Date
+  before?: Date,
+  currentUserId?: number
 ): Promise<GroupMessage[]> {
   const pool = await getPool();
 
+  // Kolon adlarını keşfet
+  const cols = await discoverGrupMesajOkunmaColumns();
+
+  // DB kolon adları: gonderen_kullanici, gonderim_tarihi
+  // Grup_Mesaj_Okunma: mesaj_id, kullanici_id, okuma_tarihi (okundu kolonu yok)
   let query = `
     SELECT TOP (@limit)
-      mesaj_id,
-      grup_id,
-      gonderen_id,
-      mesaj,
-      tarih
-    FROM ${T.GrupMesajlar}
-    WHERE grup_id = @grup_id
+      gm.mesaj_id,
+      gm.grup_id,
+      gm.gonderen_kullanici,
+      gm.mesaj,
+      gm.gonderim_tarihi,
+      k.kullanici_adi AS gonderen_kullanici_adi,
+      ISNULL(COUNT(DISTINCT gmo.[${cols.kullanici_id}]), 0) AS okuyan_sayisi
+  `;
+
+  if (currentUserId) {
+    query += `,
+      CASE 
+        WHEN EXISTS(
+          SELECT 1 
+          FROM ${T.GrupMesajOkunma} gmo_check
+          WHERE gmo_check.[${cols.mesaj_id}] = gm.mesaj_id 
+            AND gmo_check.[${cols.kullanici_id}] = @current_user_id
+            AND gmo_check.[${cols.okuma_tarihi}] IS NOT NULL
+        ) THEN 1
+        ELSE 0
+      END AS benim_okudum
+    `;
+  } else {
+    query += `, 0 AS benim_okudum`;
+  }
+
+  query += `
+    FROM ${T.GrupMesajlar} gm
+    JOIN ${T.Kullanicilar} k ON k.kullanici_id = gm.gonderen_kullanici
+    LEFT JOIN ${T.GrupMesajOkunma} gmo ON gmo.[${cols.mesaj_id}] = gm.mesaj_id AND gmo.[${cols.okuma_tarihi}] IS NOT NULL
+    WHERE gm.grup_id = @grup_id
   `;
 
   const request = pool
@@ -101,25 +229,95 @@ export async function getGroupMessages(
     .input('grup_id', sql.Int, grupId)
     .input('limit', sql.Int, limit);
 
-  if (before) {
-    request.input('before', sql.DateTime, before);
-    query += ` AND tarih < @before`;
+  if (currentUserId) {
+    request.input('current_user_id', sql.Int, currentUserId);
   }
 
-  query += ` ORDER BY tarih DESC`;
+  if (before) {
+    request.input('before', sql.DateTime, before);
+    query += ` AND gm.gonderim_tarihi < @before`;
+  }
+
+  query += `
+    GROUP BY 
+      gm.mesaj_id,
+      gm.grup_id,
+      gm.gonderen_kullanici,
+      gm.mesaj,
+      gm.gonderim_tarihi,
+      k.kullanici_adi
+    ORDER BY gm.gonderim_tarihi ASC
+  `;
 
   const result = await request.query(query);
 
-  // Tarihe göre ters sırala (en eski en üstte)
-  return result.recordset
-    .map((row: any) => ({
-      mesaj_id: row.mesaj_id,
-      grup_id: row.grup_id,
-      gonderen_id: row.gonderen_id,
-      mesaj: row.mesaj,
-      tarih: new Date(row.tarih),
-    }))
-    .reverse();
+  // Mesajları map'le
+  const messages = result.recordset.map((row: any) => ({
+    messageId: row.mesaj_id,
+    groupId: row.grup_id,
+    senderId: row.gonderen_kullanici,
+    text: row.mesaj || '', // mesaj kolonu boş olamaz ama güvenlik için
+    sentAt: new Date(row.gonderim_tarihi).toISOString(),
+    // Ek bilgiler (opsiyonel)
+    senderUsername: row.gonderen_kullanici_adi || null,
+    readCount: Number(row.okuyan_sayisi) || 0,
+    isReadByMe: row.benim_okudum === 1 || row.benim_okudum === true,
+  }));
+
+  // Mesajları çektikten sonra, kullanıcı için okundu kayıtlarını ekle
+  // Eğer kullanıcı mesajı daha önce okumadıysa ve gönderen kendisi değilse
+  if (currentUserId && messages.length > 0) {
+    try {
+      await markMessagesAsReadAfterFetch(grupId, currentUserId, messages.map(m => m.messageId));
+    } catch (err: any) {
+      // Okundu kaydı hatası mesaj listesini engellemez, sadece logla
+      console.error('[getGroupMessages] Okundu kaydı eklenirken hata:', err?.message);
+    }
+  }
+
+  return messages;
+}
+
+/**
+ * Mesajları çektikten sonra okundu kayıtlarını ekle
+ * Eğer kullanıcı mesajı daha önce okumadıysa ve gönderen kendisi değilse INSERT at
+ */
+async function markMessagesAsReadAfterFetch(
+  grupId: number,
+  kullaniciId: number,
+  mesajIds: number[]
+): Promise<void> {
+  if (mesajIds.length === 0) return;
+
+  const pool = await getPool();
+  const cols = await discoverGrupMesajOkunmaColumns();
+
+  // SQL injection'dan korunmak için her mesaj ID'si için ayrı parametre kullan
+  const request = pool.request().input('kullanici_id', sql.Int, kullaniciId);
+  
+  const mesajIdsPlaceholders = mesajIds.map((id, idx) => {
+    const paramName = `mesaj_id_${idx}`;
+    request.input(paramName, sql.Int, id);
+    return `@${paramName}`;
+  }).join(', ');
+  
+  await request.query(`
+    INSERT INTO ${T.GrupMesajOkunma} ([${cols.mesaj_id}], [${cols.kullanici_id}], [${cols.okuma_tarihi}])
+    SELECT 
+      gm.mesaj_id,
+      @kullanici_id,
+      GETDATE()
+    FROM ${T.GrupMesajlar} gm
+    WHERE gm.mesaj_id IN (${mesajIdsPlaceholders})
+      AND gm.gonderen_kullanici != @kullanici_id  -- Gönderen kendisi değilse
+      AND NOT EXISTS (
+        SELECT 1
+        FROM ${T.GrupMesajOkunma} gmo
+        WHERE gmo.[${cols.mesaj_id}] = gm.mesaj_id
+          AND gmo.[${cols.kullanici_id}] = @kullanici_id
+          AND gmo.[${cols.okuma_tarihi}] IS NOT NULL
+      )
+  `);
 }
 
 /**
@@ -129,56 +327,52 @@ export async function createGroupMessage(
   grupId: number,
   gonderenId: number,
   mesaj: string
-): Promise<GroupMessage> {
+): Promise<{ messageId: number; groupId: number; senderId: number; text: string; sentAt: string }> {
   const pool = await getPool();
 
-  // Mesajı ekle
+  // DB kolon adları: gonderen_kullanici, gonderim_tarihi
+  // SCOPE_IDENTITY ile mesaj_id'yi al
   const insertResult = await pool
     .request()
     .input('grup_id', sql.Int, grupId)
-    .input('gonderen_id', sql.Int, gonderenId)
+    .input('gonderen_kullanici', sql.Int, gonderenId)
     .input('mesaj', sql.NVarChar(sql.MAX), mesaj)
     .query(`
-      INSERT INTO ${T.GrupMesajlar} (grup_id, gonderen_id, mesaj, tarih)
-      OUTPUT INSERTED.mesaj_id, INSERTED.grup_id, INSERTED.gonderen_id, INSERTED.mesaj, INSERTED.tarih
-      VALUES (@grup_id, @gonderen_id, @mesaj, GETDATE())
+      INSERT INTO ${T.GrupMesajlar} (grup_id, gonderen_kullanici, mesaj, gonderim_tarihi)
+      VALUES (@grup_id, @gonderen_kullanici, @mesaj, GETDATE());
+      
+      SELECT SCOPE_IDENTITY() AS mesaj_id;
     `);
 
-  const inserted = insertResult.recordset[0];
-
-  // Grup üyelerini al
-  const membersResult = await pool
-    .request()
-    .input('grup_id', sql.Int, grupId)
-    .query(`
-      SELECT kullanici_id
-      FROM ${T.GrupUyeler}
-      WHERE grup_id = @grup_id
-    `);
-
-  // Okunma kayıtlarını oluştur (gönderen için okundu=1, diğerleri için 0)
-  const members = membersResult.recordset;
-  const mesajId = inserted.mesaj_id;
-
-  for (const member of members) {
-    const okundu = member.kullanici_id === gonderenId ? 1 : 0;
-    await pool
-      .request()
-      .input('mesaj_id', sql.Int, mesajId)
-      .input('kullanici_id', sql.Int, member.kullanici_id)
-      .input('okundu', sql.Bit, okundu)
-      .query(`
-        INSERT INTO ${T.GrupMesajOkunma} (mesaj_id, kullanici_id, okundu)
-        VALUES (@mesaj_id, @kullanici_id, @okundu)
-      `);
+  const mesajId = insertResult.recordset[0]?.mesaj_id;
+  
+  if (!mesajId) {
+    throw new Error('Mesaj oluşturulamadı: mesaj_id alınamadı');
   }
 
+  // Yeni eklenen mesajı çek (gonderim_tarihi dahil)
+  const selectResult = await pool
+    .request()
+    .input('mesaj_id', sql.Int, mesajId)
+    .query(`
+      SELECT mesaj_id, grup_id, gonderen_kullanici, mesaj, gonderim_tarihi
+      FROM ${T.GrupMesajlar}
+      WHERE mesaj_id = @mesaj_id
+    `);
+
+  const inserted = selectResult.recordset[0];
+  
+  if (!inserted) {
+    throw new Error('Mesaj oluşturuldu ama okunamadı');
+  }
+
+  // Standardize edilmiş response formatı
   return {
-    mesaj_id: inserted.mesaj_id,
-    grup_id: inserted.grup_id,
-    gonderen_id: inserted.gonderen_id,
-    mesaj: inserted.mesaj,
-    tarih: new Date(inserted.tarih),
+    messageId: inserted.mesaj_id,
+    groupId: inserted.grup_id,
+    senderId: inserted.gonderen_kullanici,
+    text: inserted.mesaj || '',
+    sentAt: new Date(inserted.gonderim_tarihi).toISOString(),
   };
 }
 
@@ -212,7 +406,50 @@ export async function getGroupMembers(grupId: number): Promise<GroupMember[]> {
 }
 
 /**
- * Mesajları okundu işaretle
+ * Mesajları okundu işaretle (yeni endpoint için - tüm mesajları okundu işaretle)
+ * @returns İşaretlenen mesaj sayısı
+ */
+export async function markAllGroupMessagesAsRead(
+  grupId: number,
+  kullaniciId: number
+): Promise<number> {
+  const pool = await getPool();
+
+  // Kolon adlarını keşfet
+  const cols = await discoverGrupMesajOkunmaColumns();
+
+  console.log('[markAllGroupMessagesAsRead] grupId:', grupId, 'kullaniciId:', kullaniciId);
+
+  // INSERT ile IF NOT EXISTS mantığı (okuma_tarihi yoksa INSERT at)
+  const result = await pool
+    .request()
+    .input('grup_id', sql.Int, grupId)
+    .input('kullanici_id', sql.Int, kullaniciId)
+    .query(`
+      INSERT INTO ${T.GrupMesajOkunma} ([${cols.mesaj_id}], [${cols.kullanici_id}], [${cols.okuma_tarihi}])
+      SELECT 
+        gm.mesaj_id,
+        @kullanici_id,
+        GETDATE()
+      FROM ${T.GrupMesajlar} gm
+      WHERE gm.grup_id = @grup_id
+        AND gm.gonderen_kullanici != @kullanici_id  -- Gönderen kendisi değilse
+        AND NOT EXISTS (
+          SELECT 1
+          FROM ${T.GrupMesajOkunma} gmo
+          WHERE gmo.[${cols.mesaj_id}] = gm.mesaj_id
+            AND gmo.[${cols.kullanici_id}] = @kullanici_id
+            AND gmo.[${cols.okuma_tarihi}] IS NOT NULL
+        )
+    `);
+
+  const markedCount = result.rowsAffected[0] || 0;
+  console.log('[markAllGroupMessagesAsRead] İşaretlenen mesaj sayısı:', markedCount);
+  return markedCount;
+}
+
+/**
+ * Mesajları okundu işaretle (eski endpoint için - lastMesajId'ye kadar)
  */
 export async function markMessagesAsRead(
   grupId: number,
@@ -221,22 +458,32 @@ export async function markMessagesAsRead(
 ): Promise<void> {
   const pool = await getPool();
 
+  // Kolon adlarını keşfet
+  const cols = await discoverGrupMesajOkunmaColumns();
+
   await pool
     .request()
     .input('grup_id', sql.Int, grupId)
     .input('kullanici_id', sql.Int, kullaniciId)
     .input('last_mesaj_id', sql.Int, lastMesajId)
     .query(`
-      UPDATE ${T.GrupMesajOkunma}
-      SET okundu = 1
-      WHERE kullanici_id = @kullanici_id
-        AND mesaj_id IN (
-          SELECT mesaj_id
-          FROM ${T.GrupMesajlar}
-      WHERE grup_id = @grup_id
-        AND mesaj_id <= @last_mesaj_id
-      )
-  `);
+      INSERT INTO ${T.GrupMesajOkunma} ([${cols.mesaj_id}], [${cols.kullanici_id}], [${cols.okuma_tarihi}])
+      SELECT 
+        gm.mesaj_id,
+        @kullanici_id,
+        GETDATE()
+      FROM ${T.GrupMesajlar} gm
+      WHERE gm.grup_id = @grup_id
+        AND gm.mesaj_id <= @last_mesaj_id
+        AND gm.gonderen_kullanici != @kullanici_id  -- Gönderen kendisi değilse
+        AND NOT EXISTS (
+          SELECT 1
+          FROM ${T.GrupMesajOkunma} gmo
+          WHERE gmo.[${cols.mesaj_id}] = gm.mesaj_id
+            AND gmo.[${cols.kullanici_id}] = @kullanici_id
+            AND gmo.[${cols.okuma_tarihi}] IS NOT NULL
+        )
+    `);
 }
 
 interface CreateGroupInput {
@@ -250,8 +497,6 @@ interface CreateGroupInput {
  */
 export async function createGroup(input: CreateGroupInput): Promise<{ grup_id: number; grup_adi: string }> {
   const pool = await getPool();
-
-  console.log("🔵 createGroup service - Input:", input);
 
   // Validation
   if (!input.grup_adi || input.grup_adi.trim().length < 3) {
@@ -267,21 +512,20 @@ export async function createGroup(input: CreateGroupInput): Promise<{ grup_id: n
     ? [...new Set(input.member_ids.filter((id) => id !== input.creator_id && !Number.isNaN(id)))]
     : [];
 
-  console.log("🔵 createGroup service - Processed memberIds:", memberIds);
-
   // Transaction başlat
   const transaction = pool.transaction();
   await transaction.begin();
 
   try {
-    // 1. Grup oluştur
+    // 1. Grup oluştur (olusturan_kullanici ile)
     const createGroupRequest = transaction.request();
     const createGroupResult = await createGroupRequest
       .input('grup_adi', sql.NVarChar(200), input.grup_adi.trim())
+      .input('olusturan_kullanici', sql.Int, input.creator_id)
       .query(`
-        INSERT INTO ${T.Gruplar} (grup_adi)
+        INSERT INTO ${T.Gruplar} (grup_adi, olusturan_kullanici, olusturma_tarihi)
         OUTPUT INSERTED.grup_id, INSERTED.grup_adi
-        VALUES (@grup_adi)
+        VALUES (@grup_adi, @olusturan_kullanici, GETDATE())
       `);
 
     if (createGroupResult.recordset.length === 0) {
@@ -289,24 +533,27 @@ export async function createGroup(input: CreateGroupInput): Promise<{ grup_id: n
     }
 
     const grupId = createGroupResult.recordset[0].grup_id;
-    console.log("✅ createGroup service - Group created with ID:", grupId);
 
-    // 2. Creator'ı admin olarak ekle
+    // 2. Creator'ı admin olarak ekle (duplicate kontrolü ile)
     const addCreatorRequest = transaction.request();
-    await addCreatorRequest
-      .input('grup_id', sql.Int, grupId)
-      .input('kullanici_id', sql.Int, input.creator_id)
-      .input('rol', sql.NVarChar(50), 'admin')
-      .query(`
-        INSERT INTO ${T.GrupUyeler} (grup_id, kullanici_id, rol)
-        VALUES (@grup_id, @kullanici_id, @rol)
-      `);
-
-    console.log("✅ createGroup service - Creator added as admin");
+    try {
+      await addCreatorRequest
+        .input('grup_id', sql.Int, grupId)
+        .input('kullanici_id', sql.Int, input.creator_id)
+        .input('rol', sql.NVarChar(50), 'admin')
+        .query(`
+          INSERT INTO ${T.GrupUyeler} (grup_id, kullanici_id, rol)
+          VALUES (@grup_id, @kullanici_id, @rol)
+        `);
+    } catch (creatorErr: any) {
+      // Duplicate key hatası ignore edilebilir (zaten üye)
+      if (creatorErr?.originalError?.number !== 2627) {
+        throw creatorErr;
+      }
+    }
 
     // 3. Diğer üyeleri ekle (varsa)
     if (memberIds.length > 0) {
-      // Her üye için ayrı insert (SQL Server'da bulk insert için daha güvenli)
       for (const memberId of memberIds) {
         const addMemberRequest = transaction.request();
         try {
@@ -318,20 +565,17 @@ export async function createGroup(input: CreateGroupInput): Promise<{ grup_id: n
               INSERT INTO ${T.GrupUyeler} (grup_id, kullanici_id, rol)
               VALUES (@grup_id, @kullanici_id, @rol)
             `);
-          console.log(`✅ createGroup service - Member ${memberId} added`);
         } catch (memberErr: any) {
           // Duplicate key hatası ignore edilebilir
           if (memberErr?.originalError?.number !== 2627) {
             throw memberErr;
           }
-          console.log(`⚠️ createGroup service - Member ${memberId} already exists, skipping`);
         }
       }
     }
 
     // Transaction commit
     await transaction.commit();
-    console.log("✅ createGroup service - Transaction committed successfully");
 
     return {
       grup_id: grupId,
@@ -339,15 +583,7 @@ export async function createGroup(input: CreateGroupInput): Promise<{ grup_id: n
     };
   } catch (err: any) {
     // Hata durumunda rollback
-    console.error("❌ createGroup service - Error, rolling back:", {
-      message: err?.message,
-      stack: err?.stack,
-      sqlError: err?.originalError?.message,
-      sqlNumber: err?.originalError?.number,
-      fullError: err,
-    });
     await transaction.rollback();
     throw err;
   }
 }
-

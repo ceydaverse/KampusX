@@ -10,67 +10,7 @@ import type {
   GroupMember,
 } from "../types";
 
-/**
- * Mock data fallback
- */
-const MOCK_GROUPS: Group[] = [
-  {
-    grup_id: 1,
-    grup_adi: "Final Çalışma Grubu",
-    lastMessage: {
-      mesaj: "Yarın saat 14:00'te buluşalım mı?",
-      tarih: new Date(Date.now() - 1000 * 60 * 30), // 30 dakika önce
-    },
-    unreadCount: 2,
-  },
-  {
-    grup_id: 2,
-    grup_adi: "Staj Yardımlaşma",
-    lastMessage: {
-      mesaj: "Staj başvuruları başladı!",
-      tarih: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 saat önce
-    },
-    unreadCount: 0,
-  },
-];
-
-const MOCK_MESSAGES: GroupMessage[] = [
-  {
-    mesaj_id: 1,
-    grup_id: 1,
-    gonderen_id: 2,
-    mesaj: "Merhaba herkese!",
-    tarih: new Date(Date.now() - 1000 * 60 * 60 * 2),
-  },
-  {
-    mesaj_id: 2,
-    grup_id: 1,
-    gonderen_id: 1,
-    mesaj: "Merhaba! Nasılsın?",
-    tarih: new Date(Date.now() - 1000 * 60 * 60),
-  },
-];
-
-const MOCK_MEMBERS: GroupMember[] = [
-  {
-    kullanici_id: 1,
-    ad: "Ahmet",
-    soyad: "Yılmaz",
-    rol: "admin",
-  },
-  {
-    kullanici_id: 2,
-    ad: "Ayşe",
-    soyad: "Demir",
-    rol: "uye",
-  },
-  {
-    kullanici_id: 3,
-    ad: "Mehmet",
-    soyad: "Kaya",
-    rol: "uye",
-  },
-];
+// Mock data kaldırıldı - hata durumunda kullanıcıya hata gösterilecek
 
 /**
  * Kullanıcının üye olduğu grupları getir
@@ -105,15 +45,15 @@ export async function fetchMessages(
   grupId: number,
   params?: { limit?: number; before?: string }
 ): Promise<GroupMessage[]> {
-  try {
-    const response = await api.get<MessagesResponse>(`/api/groups/${grupId}/messages`, {
-      params,
-    });
-    return response.data.items;
-  } catch (err) {
-    console.warn("Messages API failed, using mock data:", err);
-    return MOCK_MESSAGES.filter((m) => m.grup_id === grupId);
+  const response = await api.get<MessagesResponse>(`/api/groups/${grupId}/messages`, {
+    params,
+  });
+  
+  if (!response.data.success) {
+    throw new Error(response.data.message || 'Mesajlar getirilemedi');
   }
+  
+  return response.data.items || [];
 }
 
 /**
@@ -123,40 +63,37 @@ export async function sendMessage(
   grupId: number,
   payload: CreateMessageRequest
 ): Promise<GroupMessage> {
-  try {
-    const response = await api.post<CreateMessageResponse>(
-      `/api/groups/${grupId}/messages`,
-      payload
-    );
-    return response.data.item;
-  } catch (err) {
-    console.error("Send message failed:", err);
-    throw err;
+  const response = await api.post<CreateMessageResponse>(
+    `/api/groups/${grupId}/messages`,
+    payload
+  );
+  
+  if (!response.data.success) {
+    throw new Error(response.data.message || 'Mesaj gönderilemedi');
   }
+  
+  return response.data.item;
 }
 
 /**
  * Grup üyelerini getir
  */
 export async function fetchMembers(grupId: number): Promise<GroupMember[]> {
-  try {
-    const response = await api.get<MembersResponse>(`/api/groups/${grupId}/members`);
-    return response.data.items;
-  } catch (err) {
-    console.warn("Members API failed, using mock data:", err);
-    return MOCK_MEMBERS;
+  const response = await api.get<MembersResponse>(`/api/groups/${grupId}/members`);
+  
+  if (!response.data.success) {
+    throw new Error(response.data.message || 'Üyeler getirilemedi');
   }
+  
+  return response.data.items || [];
 }
 
 /**
- * Mesajları okundu işaretle
+ * Mesajları okundu işaretle (yeni endpoint - tüm mesajları okundu işaretle)
  */
-export async function markRead(
-  grupId: number,
-  payload: { kullanici_id: number; last_mesaj_id: number }
-): Promise<void> {
+export async function markRead(grupId: number): Promise<void> {
   try {
-    await api.post(`/api/groups/${grupId}/read`, payload);
+    await api.post(`/api/groups/${grupId}/read`);
   } catch (err) {
     console.error("Mark read failed:", err);
     // Hata olsa bile devam et (non-critical)

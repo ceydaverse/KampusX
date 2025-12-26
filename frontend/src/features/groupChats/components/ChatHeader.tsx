@@ -7,6 +7,7 @@ interface ChatHeaderProps {
   memberCount: number;
   onToggleMembers: () => void;
   onCloseChat?: () => void;
+  onlineUserIds?: Set<number>;
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -14,8 +15,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   memberCount,
   onToggleMembers,
   onCloseChat,
+  onlineUserIds = new Set(),
 }) => {
   if (!group) return null;
+
+  const onlineCount = onlineUserIds.size;
 
   return (
     <div className={styles.chatHeader}>
@@ -24,8 +28,21 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           {group.grup_adi.charAt(0).toUpperCase()}
         </div>
         <div>
-          <h3 className={styles.chatHeaderName}>{group.grup_adi}</h3>
-          <span className={styles.chatHeaderMeta}>{memberCount} üye</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 className={styles.chatHeaderName}>{group.grup_adi}</h3>
+            {onlineCount > 0 && (
+              <span style={{ 
+                display: 'inline-block',
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: '#4CAF50',
+              }} title={`${onlineCount} kişi online`} />
+            )}
+          </div>
+          <span className={styles.chatHeaderMeta}>
+            {memberCount} üye{onlineCount > 0 && ` · ${onlineCount} online`}
+          </span>
         </div>
       </div>
       <div className={styles.chatHeaderActions}>

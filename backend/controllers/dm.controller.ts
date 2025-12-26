@@ -183,7 +183,23 @@ export async function handleSendMessage(req: Request, res: Response) {
       item: messageResult,
     });
   } catch (err: any) {
-    console.error('Send message error:', err);
+    console.error('[DM][POST /messages]', {
+      message: err?.message,
+      number: err?.originalError?.number,
+      code: err?.code || err?.originalError?.code,
+      proc: err?.originalError?.procName,
+      line: err?.originalError?.lineNumber,
+      serverName: err?.originalError?.serverName,
+      originalError: err?.originalError?.message,
+      stack: err?.stack,
+      toUserId: req.body?.toUserId,
+      textLength: req.body?.text?.length,
+      currentUserId: req.headers['x-user-id'],
+      endpoint: 'POST /api/dm/messages',
+      aliciId: req.body?.toUserId,
+      messageLength: req.body?.text?.length || 0,
+      currentUserId: req.headers['x-user-id'],
+    });
     
     if (err?.message === 'Kullanıcı engelli' || err?.message === 'Bu kullanıcıya mesaj gönderemezsiniz') {
       return res.status(403).json({

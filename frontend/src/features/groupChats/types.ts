@@ -4,16 +4,23 @@ export interface Group {
   lastMessage?: {
     mesaj: string;
     tarih: Date;
+    gonderen_kullanici: number;
   } | null;
   unreadCount: number;
+  memberCount?: number;
 }
 
+// Standardize edilmiş mesaj formatı (backend DTO ile uyumlu)
 export interface GroupMessage {
-  mesaj_id: number;
-  grup_id: number;
-  gonderen_id: number;
-  mesaj: string;
-  tarih: Date;
+  messageId: number;
+  groupId: number;
+  senderId: number;
+  text: string;
+  sentAt: string; // ISO string
+  // Opsiyonel ek bilgiler
+  senderUsername?: string | null;
+  readCount?: number;
+  isReadByMe?: boolean;
 }
 
 export interface GroupMember {
@@ -39,8 +46,7 @@ export interface MembersResponse {
 }
 
 export interface CreateMessageRequest {
-  gonderen_id: number;
-  mesaj: string;
+  text: string; // senderId artık header'dan geliyor
 }
 
 export interface CreateMessageResponse {

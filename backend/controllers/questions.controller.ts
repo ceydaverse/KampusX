@@ -192,14 +192,25 @@ export async function handleCreateAnswer(req: Request, res: Response) {
     if (err?.message === 'UNAUTHORIZED') {
       return res.status(401).json({ success: false, message: 'Giriş yapmanız gerekiyor' });
     }
-    const message = err?.message || 'Cevap kaydedilirken hata oluştu';
-    return res.status(500).json({ success: false, message });
+    
+    console.error("❌ ANSWER INSERT ERROR:", {
+      message: err?.message,
+      number: err?.originalError?.number,
+      code: err?.code || err?.originalError?.code,
+      state: err?.originalError?.state,
+      lineNumber: err?.originalError?.lineNumber,
+      serverName: err?.originalError?.serverName,
+      procName: err?.originalError?.procName,
+      stack: err?.stack,
+    });
+    
+    return res.status(500).json({ success: false, message: "Cevap eklenemedi." });
   }
 }
 
 /**
  * DELETE /api/questions/:questionId
- * Soruyu sil (soft delete)
+ * Soruyu sil (transaction + soft/hard delete)
  */
 export async function handleDeleteQuestion(req: Request, res: Response) {
   const questionId = req.params.questionId;
@@ -210,19 +221,36 @@ export async function handleDeleteQuestion(req: Request, res: Response) {
 
   try {
     const kullaniciId = requireAuth(req);
+    const parsedQuestionId = Number(questionId);
 
-    await deleteQuestion(Number(questionId), kullaniciId);
+    await deleteQuestion(parsedQuestionId, kullaniciId);
 
-    return res.json({ success: true, message: 'Soru silindi' });
+    return res.json({ success: true });
   } catch (err: any) {
     if (err?.message === 'UNAUTHORIZED') {
       return res.status(401).json({ success: false, message: 'Giriş yapmanız gerekiyor' });
     }
+    if (err?.message === 'Soru bulunamadı') {
+      return res.status(404).json({ success: false, message: err.message });
+    }
     if (err?.message === 'Bu soruyu silme yetkiniz yok') {
       return res.status(403).json({ success: false, message: err.message });
     }
+
+    // Timeout veya SQL hata
+    const isTimeout = err?.message?.includes('Timeout') || err?.code === 'ETIMEDOUT';
     const message = err?.message || 'Soru silinirken hata oluştu';
-    return res.status(500).json({ success: false, message });
+    
+    return res.status(500).json({ 
+      success: false, 
+      message,
+      ...(process.env.NODE_ENV !== 'production' && {
+        detail: err?.originalError?.message || err?.message,
+        code: err?.code || err?.originalError?.code,
+        number: err?.originalError?.number,
+        step: isTimeout ? 'timeout' : 'unknown',
+      }),
+    });
   }
 }
 

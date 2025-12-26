@@ -125,7 +125,9 @@ export const QuestionList: React.FC<QuestionListProps> = ({
                   onClick={(e) => handleViewAnswers(e, item.soru_id)}
                   title="Cevapları gör"
                 >
-                  Cevapları Gör
+                  {item.cevap_sayisi !== undefined && item.cevap_sayisi > 0
+                    ? `${item.cevap_sayisi} cevap`
+                    : "Cevapları Gör"}
                 </button>
                 <BookmarkButton
                   questionId={item.soru_id}

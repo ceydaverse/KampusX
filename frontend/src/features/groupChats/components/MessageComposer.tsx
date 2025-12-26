@@ -1,10 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import styles from "../styles/groupChats.module.css";
 
 interface MessageComposerProps {
   onSubmit: (message: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  socket?: any;
+  groupId?: number | null;
 }
 
 const EMOJIS = ["😀", "😂", "❤️", "👍", "👏", "🎉", "🔥", "💯"];
@@ -13,9 +15,14 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   onSubmit,
   disabled = false,
   placeholder = "Mesaj yazın...",
+  socket,
+  groupId,
 }) => {
   const [message, setMessage] = useState("");
   const [showEmojis, setShowEmojis] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const stopTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTypingTimeRef = useRef<number>(0);
 
   const handleSubmit = () => {
     if (message.trim() && !disabled) {
@@ -30,6 +37,51 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
       handleSubmit();
     }
   };
+
+  // Typing indicator gönder
+  const handleMessageChange = (value: string) => {
+    setMessage(value);
+
+    if (!socket || !groupId) return;
+
+    const now = Date.now();
+    lastTypingTimeRef.current = now;
+
+    // Stop typing timeout'unu temizle
+    if (stopTypingTimeoutRef.current) {
+      clearTimeout(stopTypingTimeoutRef.current);
+      stopTypingTimeoutRef.current = null;
+    }
+
+    // 300ms debounce ile typing gönder
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      socket.emit("group:typing", { groupId });
+    }, 300);
+
+    // 1.2s yazılmazsa stopTyping gönder
+    stopTypingTimeoutRef.current = setTimeout(() => {
+      socket.emit("group:stopTyping", { groupId });
+    }, 1200);
+  };
+
+  // Component unmount veya grup değişince stopTyping gönder
+  useEffect(() => {
+    return () => {
+      if (socket && groupId && lastTypingTimeRef.current > 0) {
+        socket.emit("group:stopTyping", { groupId });
+      }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      if (stopTypingTimeoutRef.current) {
+        clearTimeout(stopTypingTimeoutRef.current);
+      }
+    };
+  }, [socket, groupId]);
 
   const handleEmojiClick = (emoji: string) => {
     setMessage((prev) => prev + emoji);
@@ -62,7 +114,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
         <textarea
           className={styles.composerTextarea}
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={(e) => handleMessageChange(e.target.value)}
           onKeyPress={handleKeyPress}
           placeholder={placeholder}
           disabled={disabled}

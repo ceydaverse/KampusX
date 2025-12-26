@@ -1,0 +1,95 @@
+.container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.feedList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.feedCard {
+  padding: 16px;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.feedCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.cardContent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cardMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: #666;
+}
+
+.metaItem {
+  white-space: nowrap;
+}
+
+.viewButton {
+  padding: 8px 16px;
+  background-color: #5fb3ff;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  align-self: flex-start;
+}
+
+.viewButton:hover {
+  background-color: #4a9fe8;
+}
+
+.viewButton:active {
+  transform: scale(0.98);
+}
+
+.loading,
+.error,
+.empty {
+  padding: 24px;
+  text-align: center;
+  color: #666;
+  font-size: 14px;
+}
+
+.error {
+  color: #ff6b6b;
+}

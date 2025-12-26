@@ -56,6 +56,30 @@ export async function unsaveQuestion(soruId: number, kullaniciId: number): Promi
 export async function getSavedQuestions(kullaniciId: number): Promise<any[]> {
   const pool = await getPool();
 
+  // Soft delete kolonu var mı kontrol et ve WHERE'a ekle
+  let softDeleteFilter = '';
+  try {
+    const softDeleteCheck = await pool.request().query(`
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = 'Forum' 
+        AND TABLE_NAME = 'Sorular' 
+        AND COLUMN_NAME IN ('silindi', 'is_deleted', 'silindi_mi')
+      `);
+    if (softDeleteCheck.recordset.length > 0) {
+      const colName = softDeleteCheck.recordset[0].COLUMN_NAME.toLowerCase();
+      if (colName === 'silindi') {
+        softDeleteFilter = ' AND (s.silindi = 0 OR s.silindi IS NULL)';
+      } else if (colName === 'is_deleted') {
+        softDeleteFilter = ' AND (s.is_deleted = 0 OR s.is_deleted IS NULL)';
+      } else if (colName === 'silindi_mi') {
+        softDeleteFilter = ' AND (s.silindi_mi = 0 OR s.silindi_mi IS NULL)';
+      }
+    }
+  } catch (err) {
+    // Kolon kontrolü hatası, soft delete filtresi ekleme
+  }
+
   const result = await pool
     .request()
     .input('kullanici_id', sql.Int, kullaniciId)
@@ -74,7 +98,7 @@ export async function getSavedQuestions(kullaniciId: number): Promise<any[]> {
       FROM ${T.SoruKaydetme} sk
       INNER JOIN ${T.Sorular} s ON sk.soru_id = s.soru_id
       LEFT JOIN ${T.Kullanicilar} k ON s.kullanici_id = k.kullanici_id
-      WHERE sk.kullanici_id = @kullanici_id
+      WHERE sk.kullanici_id = @kullanici_id${softDeleteFilter}
       ORDER BY sk.kayit_id DESC
     `);
 

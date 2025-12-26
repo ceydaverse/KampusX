@@ -37,7 +37,9 @@ export async function createQuestion(
 }
 
 export async function deleteQuestion(questionId: number): Promise<void> {
-  const response = await api.delete(`/api/questions/${questionId}`);
+  const response = await api.delete(`/api/questions/${questionId}`, {
+    timeout: 60000, // 60 saniye timeout (sadece bu istek için)
+  });
   if (!response.data.success) {
     throw new Error(response.data.message || "Soru silinemedi");
   }

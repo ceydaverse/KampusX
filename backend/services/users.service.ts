@@ -18,10 +18,20 @@ export async function getUserById(kullaniciId: number): Promise<User | null> {
   const result = await pool
     .request()
     .input('kullanici_id', sql.Int, kullaniciId)
-    .query(`
-      SELECT kullanici_id, ad, soyad, email, universite, bolum, kullanici_adi, dogum_yili, cinsiyet
+      .query(`
+      SELECT 
+        kullanici_id, 
+        ad, 
+        soyad, 
+        email, 
+        universite, 
+        bolum, 
+        kullanici_adi, 
+        dogum_yili, 
+        cinsiyet,
+        CAST(CASE WHEN silindi = 0 THEN 1 ELSE 0 END AS bit) AS aktif
       FROM dbo.Kullanicilar
-      WHERE kullanici_id = @kullanici_id
+      WHERE kullanici_id = @kullanici_id AND silindi = 0
     `);
 
   if (result.recordset.length === 0) {
@@ -54,8 +64,19 @@ export async function searchUsers(query: string, limit: number = 10): Promise<Us
       .request()
       .input('limit', sql.Int, limit)
       .query(`
-        SELECT TOP (@limit) kullanici_id, ad, soyad, email, universite, bolum, kullanici_adi, dogum_yili, cinsiyet
+        SELECT TOP (@limit) 
+          kullanici_id, 
+          ad, 
+          soyad, 
+          email, 
+          universite, 
+          bolum, 
+          kullanici_adi, 
+          dogum_yili, 
+          cinsiyet,
+          CAST(CASE WHEN silindi = 0 THEN 1 ELSE 0 END AS bit) AS aktif
         FROM dbo.Kullanicilar
+        WHERE silindi = 0
         ORDER BY kullanici_id DESC
       `);
     return result.recordset as User[];
@@ -69,7 +90,7 @@ export async function searchUsers(query: string, limit: number = 10): Promise<Us
     .request()
     .input('search', sql.NVarChar(200), searchTerm)
     .input('limit', sql.Int, limit)
-    .query(`
+      .query(`
       SELECT TOP (@limit) 
         kullanici_id, 
         ad, 
@@ -79,12 +100,14 @@ export async function searchUsers(query: string, limit: number = 10): Promise<Us
         bolum, 
         kullanici_adi, 
         dogum_yili, 
-        cinsiyet
+        cinsiyet,
+        CAST(CASE WHEN silindi = 0 THEN 1 ELSE 0 END AS bit) AS aktif
       FROM dbo.Kullanicilar
       WHERE (ad LIKE @search
          OR soyad LIKE @search
          OR email LIKE @search
          OR kullanici_adi LIKE @search)
+        AND silindi = 0
       ORDER BY 
         CASE 
           WHEN ad LIKE @search THEN 1

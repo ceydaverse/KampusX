@@ -11,6 +11,7 @@ import { QuestionDetailModal } from "../questions/components/QuestionDetailModal
 import { createQuestion, fetchQuestions } from "../questions/questionsApi";
 import { fetchCategories, type Category } from "./categoriesApi";
 import type { Question } from "../questions/types";
+import { TrendingFeedPanel } from "../feed/components/TrendingFeedPanel";
 
 // Slug -> ana_kategori_id mapping
 // Not: Bu ID'ler DB'deki dbo.Kategoriler tablosundaki ana_kategori_id değerlerine göre ayarlanmalıdır
@@ -415,13 +416,10 @@ export default function CategoryPage() {
                 <span className={`${styles.cardIcon} ${styles.iconBounce}`}>
                   📌
                 </span>
-                <span className={styles.cardTitle}>akış sayfası</span>
-                <span className={styles.cardBadge}>0 paylaşım</span>
+                <span className={styles.cardTitle}>trend sorular</span>
               </div>
               <div className={styles.cardBody}>
-                <p className={styles.cardText}>
-                  Şu an için bir akış yok. Yeni paylaşımlar geldikçe burada görünecek.
-                </p>
+                <TrendingFeedPanel limit={10} />
               </div>
             </section>
           </div>
@@ -457,9 +455,15 @@ export default function CategoryPage() {
           setScrollToAnswers(false);
         }}
         scrollToAnswers={scrollToAnswers}
-        onAnswerCreated={() => {
-          // Cevap eklendiğinde soruları yeniden yükle
-          loadQuestions();
+        onAnswerCreated={(questionId) => {
+          // Cevap eklendiğinde ilgili sorunun cevap sayısını artır
+          setQuestions((prev) =>
+            prev.map((q) =>
+              q.soru_id === questionId
+                ? { ...q, cevap_sayisi: (q.cevap_sayisi ?? 0) + 1 }
+                : q
+            )
+          );
         }}
       />
     </div>

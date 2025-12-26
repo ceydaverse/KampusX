@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthProvider";
 import Header from "../../../MainLayout/components/Header/Header";
@@ -10,6 +10,7 @@ import { MembersPanel } from "../components/MembersPanel";
 import { CreateGroupModal } from "../components/CreateGroupModal";
 import { fetchGroups, fetchMessages, sendMessage, fetchMembers, markRead } from "../api/groupChatsApi";
 import type { Group, GroupMessage, GroupMember } from "../types";
+import { useSocket } from "../../../providers/SocketProvider";
 import styles from "../styles/groupChats.module.css";
 
 export default function GroupChatsPage() {
@@ -25,6 +26,10 @@ export default function GroupChatsPage() {
   const [sending, setSending] = useState(false);
   const [membersPanelOpen, setMembersPanelOpen] = useState(false);
   const [createGroupModalOpen, setCreateGroupModalOpen] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<Record<number, string>>({});
+  const { socket } = useSocket();
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const stopTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Grupları yükle
   const loadGroups = useCallback(async () => {
@@ -97,11 +102,15 @@ export default function GroupChatsPage() {
     const loadData = async () => {
       try {
         const [messagesData, membersData] = await Promise.all([
-          fetchMessages(selectedGroupId),
+          fetchMessages(selectedGroupId, { userId: user.id }), // userId query param ekle
           fetchMembers(selectedGroupId),
         ]);
 
-        setMessages(messagesData);
+        // Mesajları unique yap (messageId ile) ve overwrite et (append etme)
+        const uniqueMessages = messagesData.filter((msg, index, self) =>
+          index === self.findIndex((m) => m.messageId === msg.messageId)
+        );
+        setMessages(uniqueMessages);
         setMembers(membersData);
 
         // Üye isimlerini map'le
@@ -117,11 +126,7 @@ export default function GroupChatsPage() {
 
         // Mesajları okundu işaretle
         if (messagesData.length > 0) {
-          const lastMessage = messagesData[messagesData.length - 1];
-          markRead(selectedGroupId, {
-            kullanici_id: user.id,
-            last_mesaj_id: lastMessage.mesaj_id,
-          });
+          markRead(selectedGroupId);
         }
       } catch (err) {
         console.error("Failed to load messages/members:", err);
@@ -130,6 +135,121 @@ export default function GroupChatsPage() {
 
     loadData();
   }, [selectedGroupId, user?.id]);
+
+  // Socket.IO: Grup odasına katıl/ayrıl ve typing indicator
+  useEffect(() => {
+    if (!socket?.socket || !selectedGroupId || !user?.id) return;
+
+    const socketInstance = socket.socket;
+    socketInstance.emit("group:join", { groupId: selectedGroupId });
+
+    // Typing indicator event'leri
+    const handleTyping = (data: { groupId: number; userId: number }) => {
+      if (data.groupId === selectedGroupId && data.userId !== user.id) {
+        const userName = memberNames[data.userId] || `Kullanıcı ${data.userId}`;
+        setTypingUsers((prev) => ({ ...prev, [data.userId]: userName }));
+
+        // 3 saniye sonra otomatik kaldır (stopTyping gelmezse)
+        setTimeout(() => {
+          setTypingUsers((prev) => {
+            const next = { ...prev };
+            delete next[data.userId];
+            return next;
+          });
+        }, 3000);
+      }
+    };
+
+    const handleStopTyping = (data: { groupId: number; userId: number }) => {
+      if (data.groupId === selectedGroupId && data.userId !== user.id) {
+        setTypingUsers((prev) => {
+          const next = { ...prev };
+          delete next[data.userId];
+          return next;
+        });
+      }
+    };
+
+    // Read update event'i
+    const handleReadUpdate = (data: { groupId: number }) => {
+      if (data.groupId === selectedGroupId) {
+        // Mesajları yeniden yükle (read receipt güncellenmesi için)
+        fetchMessages(selectedGroupId).then((messagesData) => {
+          setMessages(messagesData);
+        });
+      }
+    };
+
+    // Yeni mesaj event'i (diğer kullanıcılardan gelen)
+    const handleNewMessage = (data: { groupId: number; messageId: number; senderId: number; text: string; sentAt: string }) => {
+      if (data.groupId === selectedGroupId && data.senderId !== user.id) {
+        // Eğer aktif gruptaysa, mesajı listeye ekle
+        const newMessage: GroupMessage = {
+          messageId: data.messageId,
+          groupId: data.groupId,
+          senderId: data.senderId,
+          text: data.text,
+          sentAt: data.sentAt,
+          senderUsername: memberNames[data.senderId] || null,
+        };
+        setMessages((prev) => {
+          // Duplicate kontrolü (messageId ile)
+          if (prev.some(m => m.messageId === data.messageId)) {
+            return prev;
+          }
+          return [...prev, newMessage];
+        });
+        // Mesajları okundu işaretle (aktif gruptaysak)
+        markRead(selectedGroupId);
+      } else if (data.groupId !== selectedGroupId) {
+        // Eğer aktif grup değilse, unread count'u artır
+        setGroups((prev) =>
+          prev.map((g) =>
+            g.grup_id === data.groupId
+              ? { ...g, unreadCount: (g.unreadCount || 0) + 1 }
+              : g
+          )
+        );
+      }
+    };
+
+    // Presence update event'i
+    const handlePresenceUpdate = (data: { userId: number; status: 'online' | 'offline'; lastSeen?: Date }) => {
+      // Online/offline durumunu state'e kaydet
+      setOnlineUsers((prev) => {
+        const next = new Set(prev);
+        if (data.status === 'online') {
+          next.add(data.userId);
+        } else {
+          next.delete(data.userId);
+        }
+        return next;
+      });
+    };
+
+    // Presence snapshot event'i (grup odasına katıldığımızda)
+    const handlePresenceSnapshot = (data: { onlineUserIds: number[] }) => {
+      // Online üyeleri state'e kaydet
+      setOnlineUsers(new Set(data.onlineUserIds));
+    };
+
+    socketInstance.on("group:typing", handleTyping);
+    socketInstance.on("group:stopTyping", handleStopTyping);
+    socketInstance.on("group:readUpdate", handleReadUpdate);
+    socketInstance.on("group:newMessage", handleNewMessage);
+    socketInstance.on("presence:update", handlePresenceUpdate);
+    socketInstance.on("presence:snapshot", handlePresenceSnapshot);
+
+    return () => {
+      socketInstance.emit("group:leave", { groupId: selectedGroupId });
+      socketInstance.off("group:typing", handleTyping);
+      socketInstance.off("group:stopTyping", handleStopTyping);
+      socketInstance.off("group:readUpdate", handleReadUpdate);
+      socketInstance.off("group:newMessage", handleNewMessage);
+      socketInstance.off("presence:update", handlePresenceUpdate);
+      socketInstance.off("presence:snapshot", handlePresenceSnapshot);
+    };
+  }, [socket, selectedGroupId, user?.id, memberNames]);
 
   const handleSelectGroup = useCallback(
     (grupId: number) => {
@@ -152,12 +272,13 @@ export default function GroupChatsPage() {
       if (!selectedGroupId || !user?.id || sending) return;
 
       // Optimistic update
+      const tempMessageId = Date.now(); // Temporary ID
       const tempMessage: GroupMessage = {
-        mesaj_id: Date.now(), // Temporary ID
-        grup_id: selectedGroupId,
-        gonderen_id: user.id,
-        mesaj: messageText,
-        tarih: new Date(),
+        messageId: tempMessageId,
+        groupId: selectedGroupId,
+        senderId: user.id,
+        text: messageText,
+        sentAt: new Date().toISOString(),
       };
 
       setMessages((prev) => [...prev, tempMessage]);
@@ -165,23 +286,19 @@ export default function GroupChatsPage() {
 
       try {
         const newMessage = await sendMessage(selectedGroupId, {
-          gonderen_id: user.id,
-          mesaj: messageText,
+          text: messageText,
         });
 
-        // Gerçek mesajla değiştir
-        setMessages((prev) => prev.map((m) => (m.mesaj_id === tempMessage.mesaj_id ? newMessage : m)));
+        // Gerçek mesajla değiştir (tempMessageId ile eşleştir)
+        setMessages((prev) => prev.map((m) => (m.messageId === tempMessageId ? newMessage : m)));
 
-        // Okundu işaretle
-        markRead(selectedGroupId, {
-          kullanici_id: user.id,
-          last_mesaj_id: newMessage.mesaj_id,
-        });
-      } catch (err) {
+        // Okundu işaretle (backend'de tüm mesajlar otomatik işaretlenir)
+      } catch (err: any) {
         // Hata durumunda optimistic update'i geri al
-        setMessages((prev) => prev.filter((m) => m.mesaj_id !== tempMessage.mesaj_id));
+        setMessages((prev) => prev.filter((m) => m.messageId !== tempMessageId));
         console.error("Failed to send message:", err);
-        alert("Mesaj gönderilemedi. Lütfen tekrar deneyin.");
+        const errorMessage = err?.response?.data?.message || err?.message || "Mesaj gönderilemedi. Lütfen tekrar deneyin.";
+        alert(errorMessage);
       } finally {
         setSending(false);
       }
@@ -227,8 +344,18 @@ export default function GroupChatsPage() {
                 currentUserId={user?.id || null}
                 memberNames={memberNames}
               />
+              {typingUsers && Object.keys(typingUsers).length > 0 && (
+                <div className={styles.typingIndicator}>
+                  {Object.values(typingUsers).join(", ")} yazıyor...
+                </div>
+              )}
               {user ? (
-                <MessageComposer onSubmit={handleSendMessage} disabled={sending} />
+                <MessageComposer
+                  onSubmit={handleSendMessage}
+                  disabled={sending}
+                  socket={socket}
+                  groupId={selectedGroupId}
+                />
               ) : (
                 <div className={styles.loginPrompt}>
                   <p>

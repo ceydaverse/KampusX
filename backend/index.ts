@@ -17,6 +17,7 @@ import dmRoutes from './routes/dm.routes';
 import notificationsRoutes from './routes/notifications.routes';
 import followsRoutes from './routes/follows.routes';
 import searchRoutes from './routes/search.routes';
+import feedRoutes from './routes/feed.routes';
 
 //const app = express();
 
@@ -79,8 +80,12 @@ setIO(io);
 
 // Socket.IO handlers setup
 import { setupSocketAuth, setupSocketHandlers } from './socket/dm.socket';
+import { setupGroupSocketHandlers } from './socket/groups.socket';
+import { setupPresenceSystem } from './socket/presence';
 setupSocketAuth(io);
 setupSocketHandlers(io);
+setupGroupSocketHandlers(io);
+setupPresenceSystem(io);
 
 // ------------------------
 //  TEST ENDPOINTLER
@@ -187,6 +192,11 @@ app.use('/api/notifications', notificationsRoutes);
 //  FOLLOWS
 // ------------------------
 app.use('/api/follows', followsRoutes);
+
+// ------------------------
+//  FEED
+// ------------------------
+app.use('/api/feed', feedRoutes);
 
 // ------------------------
 //  GLOBAL ERROR HANDLER (tüm route'lardan sonra)

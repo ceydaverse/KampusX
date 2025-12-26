@@ -20,6 +20,7 @@ export type Question = {
   likeCount?: number;
   isLikedByMe?: boolean;
   isSavedByMe?: boolean;
+  cevap_sayisi?: number; // Cevap sayısı (backend'den gelir)
   author?: QuestionAuthor;
 };
 

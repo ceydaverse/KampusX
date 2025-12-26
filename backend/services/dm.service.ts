@@ -2,7 +2,30 @@ import { getPool, sql } from '../db';
 import { createNotification, getUserDisplayName } from './notifications.service';
 
 /**
+ * Mesajlasma tablosu kolon adları (sabit - DB gerçeğine göre)
+ * DB Kolonları:
+ * - mesaj_id
+ * - oda_id (mesajlasma_id değil!)
+ * - gonderen_kullanici (gonderen_id değil!)
+ * - mesaj
+ * - gonderim_tarihi (veya tarih)
+ * - okundu
+ * - tarih
+ * - alici_id YOK (oda tablosundan bulunmalı)
+ */
+const MESAJLASMA_COLS = {
+  mesaj_id: 'mesaj_id',
+  oda_id: 'oda_id',  // mesajlasma_id değil!
+  gonderen_kullanici: 'gonderen_kullanici',  // gonderen_id değil!
+  mesaj: 'mesaj',
+  tarih: 'tarih',  // veya gonderim_tarihi
+  okundu: 'okundu',
+};
+
+/**
  * İki kullanıcı arasındaki oda ID'sini bul veya oluştur
+ * Tablo: dbo.Mesaj_Oda (Mesajlasma_Oda değil)
+ * Kolonlar: oda_id, kullanici1_id, kullanici2_id (muhtemelen)
  */
 async function getOrCreateRoomId(userId1: number, userId2: number): Promise<number> {
   const pool = await getPool();
@@ -11,39 +34,53 @@ async function getOrCreateRoomId(userId1: number, userId2: number): Promise<numb
   const a = Math.min(userId1, userId2);
   const b = Math.max(userId1, userId2);
 
+  console.log('[DM][ROOM] getOrCreateRoomId:', { 
+    table: 'dbo.Mesaj_Oda', 
+    k1: userId1, 
+    k2: userId2, 
+    a, 
+    b 
+  });
+
   try {
-    // Önce tablo kolonlarını INFORMATION_SCHEMA'dan oku
+    // Önce tablo kolonlarını INFORMATION_SCHEMA'dan oku (dbo.Mesaj_Oda)
     const schemaResult = await pool
       .request()
       .query(`
         SELECT COLUMN_NAME, DATA_TYPE
         FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'Mesajlasma_Oda'
+        WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'Mesaj_Oda'
         ORDER BY ORDINAL_POSITION
       `);
 
-    const columns = schemaResult.recordset.map((row: any) => row.COLUMN_NAME.toLowerCase());
+    const columns = schemaResult.recordset.map((row: any) => row.COLUMN_NAME);
+    console.log('[DM][ROOM] Mesaj_Oda kolonları:', columns);
     
-    // Oda ID kolonunu bul
-    const roomIdCol = columns.find((col: string) => 
-      col.includes('mesajlasma_id') || col.includes('oda_id') || col === 'id'
-    );
+    // Oda ID kolonunu bul (oda_id, mesajlasma_id, id gibi)
+    const roomIdCol = columns.find((col: string) => {
+      const colLower = col.toLowerCase();
+      return colLower === 'oda_id' || 
+             colLower.includes('mesajlasma_id') || 
+             colLower === 'id' ||
+             colLower.includes('room_id');
+    }) || 'oda_id'; // Fallback: oda_id
     
     // Kullanıcı kolonlarını bul
-    const user1Col = columns.find((col: string) => 
-      col.includes('kullanici1') || col.includes('user1') || col.includes('kullanici_1')
-    );
-    const user2Col = columns.find((col: string) => 
-      col.includes('kullanici2') || col.includes('user2') || col.includes('kullanici_2')
-    );
+    const user1Col = columns.find((col: string) => {
+      const colLower = col.toLowerCase();
+      return colLower === 'kullanici1_id' || 
+             colLower.includes('user1') || 
+             colLower === 'kullanici_1_id';
+    }) || 'kullanici1_id'; // Fallback
 
-    if (!roomIdCol || !user1Col || !user2Col) {
-      const errorMsg = `Mesajlasma_Oda tablosu kolonları bulunamadı. Bulunan kolonlar: ${columns.join(', ')}`;
-      console.error('❌ getOrCreateRoomId - Schema Error:', errorMsg);
-      throw new Error(errorMsg);
-    }
+    const user2Col = columns.find((col: string) => {
+      const colLower = col.toLowerCase();
+      return colLower === 'kullanici2_id' || 
+             colLower.includes('user2') || 
+             colLower === 'kullanici_2_id';
+    }) || 'kullanici2_id'; // Fallback
 
-    console.log('🔵 getOrCreateRoomId - Schema:', { roomIdCol, user1Col, user2Col });
+    console.log('[DM][ROOM] Kullanılan kolonlar:', { roomIdCol, user1Col, user2Col });
 
     // Oda var mı kontrol et
     const findResult = await pool
@@ -51,14 +88,14 @@ async function getOrCreateRoomId(userId1: number, userId2: number): Promise<numb
       .input('a', sql.Int, a)
       .input('b', sql.Int, b)
       .query(`
-        SELECT ${roomIdCol} AS roomId
-        FROM dbo.Mesajlasma_Oda
-        WHERE ${user1Col} = @a AND ${user2Col} = @b
+        SELECT [${roomIdCol}] AS roomId
+        FROM dbo.Mesaj_Oda
+        WHERE [${user1Col}] = @a AND [${user2Col}] = @b
       `);
 
     if (findResult.recordset.length > 0) {
       const roomId = findResult.recordset[0].roomId;
-      console.log('✅ getOrCreateRoomId - Room found:', roomId);
+      console.log('[DM][ROOM] Oda bulundu:', roomId);
       return roomId;
     }
 
@@ -68,8 +105,8 @@ async function getOrCreateRoomId(userId1: number, userId2: number): Promise<numb
       .input('a', sql.Int, a)
       .input('b', sql.Int, b)
       .query(`
-        INSERT INTO dbo.Mesajlasma_Oda (${user1Col}, ${user2Col})
-        OUTPUT INSERTED.${roomIdCol} AS roomId
+        INSERT INTO dbo.Mesaj_Oda ([${user1Col}], [${user2Col}])
+        OUTPUT INSERTED.[${roomIdCol}] AS roomId
         VALUES (@a, @b)
       `);
 
@@ -78,13 +115,18 @@ async function getOrCreateRoomId(userId1: number, userId2: number): Promise<numb
     }
 
     const roomId = createResult.recordset[0].roomId;
-    console.log('✅ getOrCreateRoomId - Room created:', roomId);
+    console.log('[DM][ROOM] Oda oluşturuldu:', roomId);
     return roomId;
 
   } catch (err: any) {
     const errorMsg = err?.message || err?.originalError?.message || 'Bilinmeyen hata';
-    console.error('❌ getOrCreateRoomId - Error:', {
+    console.error('[DM][SQL] getOrCreateRoomId ERROR:', {
       message: errorMsg,
+      number: err?.originalError?.number,
+      code: err?.code || err?.originalError?.code,
+      proc: err?.originalError?.procName,
+      line: err?.originalError?.lineNumber,
+      serverName: err?.originalError?.serverName,
       stack: err?.stack,
       sqlError: err?.originalError?.message,
     });
@@ -124,10 +166,10 @@ export interface DirectMessage {
 
 /**
  * Kullanıcının konuşmalarını getir
- * Mesajlasma_Oda tablosundan odaları bulur, her oda için karşı kullanıcıyı ve son mesajı getirir
+ * Mesaj_Oda tablosundan odaları bulur, her oda için karşı kullanıcıyı ve son mesajı getirir
  * 
  * SQL Mantığı:
- * 1. Mesajlasma_Oda tablosundan kullanıcının dahil olduğu odaları getir (WHERE kullanici1_id = @me OR kullanici2_id = @me)
+ * 1. Mesaj_Oda tablosundan kullanıcının dahil olduğu odaları getir (WHERE kullanici1_id = @me OR kullanici2_id = @me)
  * 2. Karşı tarafı hesapla: CASE WHEN kullanici1_id = @me THEN kullanici2_id ELSE kullanici1_id END
  * 3. Her oda için Mesajlasma tablosundan SON mesajı OUTER APPLY ile al
  * 4. otherUserId ile dbo.Kullanicilar tablosuna JOIN yap
@@ -137,12 +179,27 @@ export async function getConversations(currentUserId: number): Promise<Conversat
   const pool = await getPool();
 
   try {
+    // Mesaj_Oda tablosunun ID kolonunu keşfet (oda_id mi mesajlasma_id mi?)
+    const schemaCheck = await pool
+      .request()
+      .query(`
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'Mesaj_Oda'
+        ORDER BY ORDINAL_POSITION
+      `);
+    
+    const columns = schemaCheck.recordset.map((row: any) => row.COLUMN_NAME.toLowerCase());
+    const roomIdCol = columns.find((col: string) => 
+      col === 'oda_id' || col.includes('mesajlasma_id') || col === 'id'
+    ) || 'oda_id'; // Fallback
+
     const result = await pool
       .request()
       .input('me', sql.Int, currentUserId)
       .query(`
         SELECT 
-          mo.mesajlasma_id AS mesajlasmaId,
+          mo.[${roomIdCol}] AS mesajlasmaId,
           -- Karşı tarafı hesapla
           CASE 
             WHEN mo.kullanici1_id = @me THEN mo.kullanici2_id
@@ -159,29 +216,32 @@ export async function getConversations(currentUserId: number): Promise<Conversat
               END AS VARCHAR
             )
           ) AS otherUserName,
+          -- aktif alias (silindi kolonuna göre)
+          CAST(CASE WHEN k.silindi = 0 THEN 1 ELSE 0 END AS bit) AS aktif,
           -- Son mesaj (OUTER APPLY ile - mesaj yoksa NULL)
           lm.mesaj AS lastMessageText,
           -- Son mesaj tarihi
           lm.tarih AS lastMessageAt
-        FROM dbo.Mesajlasma_Oda mo
+        FROM dbo.Mesaj_Oda mo
         -- Karşı taraf bilgisini getir
         INNER JOIN dbo.Kullanicilar k ON k.kullanici_id = CASE 
           WHEN mo.kullanici1_id = @me THEN mo.kullanici2_id
           ELSE mo.kullanici1_id
         END
+          AND k.silindi = 0
         -- Her oda için son mesajı al (OUTER APPLY - mesaj yoksa bile oda listelensin)
         OUTER APPLY (
           SELECT TOP 1
-            m.mesaj,
-            m.tarih,
-            m.gonderen_id
-          FROM dbo.Mesajlasma m
-          WHERE m.mesajlasma_id = mo.mesajlasma_id
-          ORDER BY m.tarih DESC
+            last_mesaj.${MESAJLASMA_COLS.mesaj} AS mesaj,
+            last_mesaj.${MESAJLASMA_COLS.tarih} AS tarih,
+            last_mesaj.${MESAJLASMA_COLS.gonderen_kullanici} AS gonderen_id
+          FROM dbo.Mesajlasma last_mesaj
+          WHERE last_mesaj.${MESAJLASMA_COLS.oda_id} = mo.[${roomIdCol}]
+          ORDER BY last_mesaj.${MESAJLASMA_COLS.tarih} DESC
         ) AS lm
         WHERE mo.kullanici1_id = @me OR mo.kullanici2_id = @me
         -- Son mesaj tarihine göre DESC sırala (tarih NULL olanlar en sonda)
-        ORDER BY lm.tarih DESC, mo.mesajlasma_id DESC
+        ORDER BY lm.tarih DESC, mo.[${roomIdCol}] DESC
       `);
 
     return result.recordset.map((row: any) => ({
@@ -192,13 +252,15 @@ export async function getConversations(currentUserId: number): Promise<Conversat
       lastMessageAt: row.lastMessageAt ? new Date(row.lastMessageAt).toISOString() : null,
     })) as ConversationResponse[];
   } catch (err: any) {
-    console.error('❌ getConversations - SQL Error:', {
+    console.error('[DM][SQL ERROR] getConversations:', {
       message: err?.message,
+      number: err?.originalError?.number,
+      code: err?.code || err?.originalError?.code,
+      proc: err?.originalError?.procName,
+      line: err?.originalError?.lineNumber,
+      serverName: err?.originalError?.serverName,
       originalError: err?.originalError?.message,
-      code: err?.code,
       stack: err?.stack,
-      sqlState: err?.sqlState,
-      sqlMessage: err?.sqlMessage,
     });
     
     // Hata durumunda boş array dön (frontend çökmesin)
@@ -210,7 +272,7 @@ export async function getConversations(currentUserId: number): Promise<Conversat
  * İki kullanıcı arasındaki mesajları getir
  * 
  * SQL Mantığı:
- * 1. Mesajlasma_Oda tablosunda iki kullanıcı arasındaki odayı bul (TOP 1)
+ * 1. Mesaj_Oda tablosunda iki kullanıcı arasındaki odayı bul (TOP 1)
  * 2. Oda yoksa boş array dön
  * 3. Oda varsa Mesajlasma tablosundan odaya ait mesajları getir
  */
@@ -221,50 +283,59 @@ export async function getMessages(
   const pool = await getPool();
 
   try {
-    // Mesajlasma_Oda tablosunda odayı bul
-    // SELECT TOP 1 mesajlasma_id FROM dbo.Mesajlasma_Oda
-    // WHERE (kullanici1_id=@me AND kullanici2_id=@other) OR (kullanici1_id=@other AND kullanici2_id=@me)
+    // Mesaj_Oda tablosunda odayı bul
+    // Önce kolon adlarını keşfet (oda_id mi mesajlasma_id mi?)
+    const schemaCheck = await pool
+      .request()
+      .query(`
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'Mesaj_Oda'
+        ORDER BY ORDINAL_POSITION
+      `);
+    
+    const columns = schemaCheck.recordset.map((row: any) => row.COLUMN_NAME.toLowerCase());
+    const roomIdCol = columns.find((col: string) => 
+      col === 'oda_id' || col.includes('mesajlasma_id') || col === 'id'
+    ) || 'oda_id'; // Fallback
+
     const roomResult = await pool
       .request()
       .input('me', sql.Int, currentUserId)
       .input('other', sql.Int, withUserId)
       .query(`
-        SELECT TOP 1 mesajlasma_id
-        FROM dbo.Mesajlasma_Oda
+        SELECT TOP 1 [${roomIdCol}] AS mesajlasmaId
+        FROM dbo.Mesaj_Oda
         WHERE (kullanici1_id = @me AND kullanici2_id = @other)
            OR (kullanici1_id = @other AND kullanici2_id = @me)
       `);
 
     // Oda yoksa boş array dön
-    if (roomResult.recordset.length === 0 || !roomResult.recordset[0].mesajlasma_id) {
+    if (roomResult.recordset.length === 0 || !roomResult.recordset[0].mesajlasmaId) {
       return {
         mesajlasmaId: null,
         items: [],
       };
     }
 
-    const mesajlasmaId = Number(roomResult.recordset[0].mesajlasma_id);
+    const mesajlasmaId = Number(roomResult.recordset[0].mesajlasmaId);
 
-    // Odaya ait mesajları getir
-    // SELECT mesaj_id,mesajlasma_id,gonderen_id,alici_id,mesaj,tarih,okundu
-    // FROM dbo.Mesajlasma
-    // WHERE mesajlasma_id=@odaId
-    // ORDER BY tarih ASC
+    // Odaya ait mesajları getir - sabit kolon adları kullan
     const messagesResult = await pool
       .request()
-      .input('mesajlasma_id', sql.Int, mesajlasmaId)
+      .input('oda_id', sql.Int, mesajlasmaId)
       .query(`
         SELECT 
-          mesaj_id,
-          mesajlasma_id,
-          gonderen_id,
-          alici_id,
-          mesaj,
-          tarih,
-          okundu
+          ${MESAJLASMA_COLS.mesaj_id} AS mesaj_id,
+          ${MESAJLASMA_COLS.oda_id} AS mesajlasma_id,
+          ${MESAJLASMA_COLS.gonderen_kullanici} AS gonderen_id,
+          NULL AS alici_id,
+          ${MESAJLASMA_COLS.mesaj} AS mesaj,
+          ${MESAJLASMA_COLS.tarih} AS tarih,
+          ${MESAJLASMA_COLS.okundu} AS okundu
         FROM dbo.Mesajlasma
-        WHERE mesajlasma_id = @mesajlasma_id
-        ORDER BY tarih ASC
+        WHERE ${MESAJLASMA_COLS.oda_id} = @oda_id
+        ORDER BY ${MESAJLASMA_COLS.tarih} ASC
       `);
 
     const items = messagesResult.recordset.map((row: any) => ({
@@ -274,7 +345,7 @@ export async function getMessages(
       mesaj: String(row.mesaj || ''),
       tarih: row.tarih,
       okundu_by_sender: row.gonderen_id === currentUserId ? (row.okundu === 1 || row.okundu === true) : undefined,
-      okundu_by_receiver: row.alici_id === currentUserId ? (row.okundu === 1 || row.okundu === true) : undefined,
+      okundu_by_receiver: row.gonderen_id !== currentUserId ? (row.okundu === 1 || row.okundu === true) : undefined,  // alici_id yok, gonderen_id != currentUserId kontrol et
     })) as DirectMessage[];
 
     return {
@@ -282,12 +353,14 @@ export async function getMessages(
       items,
     };
   } catch (err: any) {
-    console.error('❌ getMessages - SQL Error:', {
+    console.error('[DM][SQL ERROR] getMessages:', {
       message: err?.message,
+      number: err?.originalError?.number,
+      code: err?.code || err?.originalError?.code,
+      proc: err?.originalError?.procName,
+      line: err?.originalError?.lineNumber,
+      serverName: err?.originalError?.serverName,
       originalError: err?.originalError?.message,
-      code: err?.code,
-      sqlState: err?.sqlState,
-      sqlMessage: err?.sqlMessage,
       stack: err?.stack,
       currentUserId,
       withUserId,
@@ -311,7 +384,7 @@ export async function sendMessage(
 ): Promise<DirectMessage> {
   const pool = await getPool();
 
-  // Engelleme kontrolü (TRY/CATCH ile - tablo yoksa devam et)
+  // Engelleme kontrolü (TRY/CATCH ile - tablo yoksa veya aktif kolonu yoksa devam et)
   try {
     const blockCheck = await pool
       .request()
@@ -320,26 +393,31 @@ export async function sendMessage(
       .query(`
         SELECT engel_id FROM dbo.Kullanici_Engel
         WHERE engelleyen_id = @engelleyen_id 
-          AND engellenen_id = @engellenen_id 
-          AND aktif = 1
+          AND engellenen_id = @engellenen_id
       `);
 
     if (blockCheck.recordset.length > 0) {
       throw new Error('Kullanıcı engelli');
     }
   } catch (err: any) {
-    // Eğer hata "Invalid object name" ve "Kullanici_Engel" içeriyorsa, engel kontrolünü atla
+    // Eğer hata "Invalid object name" içeriyorsa, engel kontrolünü atla
     const errorMessage = err?.message || err?.originalError?.message || '';
-    if (errorMessage.includes('Invalid object name') && errorMessage.includes('Kullanici_Engel')) {
-      console.warn('Kullanici_Engel table missing, skipping block check');
+    if (
+      (errorMessage.includes('Invalid object name') && errorMessage.includes('Kullanici_Engel')) ||
+      errorMessage.includes("Invalid column name 'aktif'")
+    ) {
+      console.warn('Kullanici_Engel table/aktif column missing, skipping block check');
       // Engel kontrolü yokmuş gibi devam et
-    } else {
-      // Diğer hatalar için normal hatayı fırlat
+    } else if (errorMessage.includes('Kullanıcı engelli')) {
+      // Bu bizim fırlattığımız hata, yukarı fırlat
       throw err;
+    } else {
+      // Diğer hatalar için engel kontrolünü atla (tablo/kolon yoksa)
+      console.warn('Engel kontrolü atlandı (tablo/kolon mevcut değil):', errorMessage);
     }
   }
 
-  // Karşı tarafın engelleme kontrolü (TRY/CATCH ile - tablo yoksa devam et)
+  // Karşı tarafın engelleme kontrolü (TRY/CATCH ile - tablo yoksa veya aktif kolonu yoksa devam et)
   try {
     const reverseBlockCheck = await pool
       .request()
@@ -348,22 +426,27 @@ export async function sendMessage(
       .query(`
         SELECT engel_id FROM dbo.Kullanici_Engel
         WHERE engelleyen_id = @engelleyen_id 
-          AND engellenen_id = @engellenen_id 
-          AND aktif = 1
+          AND engellenen_id = @engellenen_id
       `);
 
     if (reverseBlockCheck.recordset.length > 0) {
       throw new Error('Bu kullanıcıya mesaj gönderemezsiniz');
     }
   } catch (err: any) {
-    // Eğer hata "Invalid object name" ve "Kullanici_Engel" içeriyorsa, engel kontrolünü atla
+    // Eğer hata "Invalid object name" içeriyorsa, engel kontrolünü atla
     const errorMessage = err?.message || err?.originalError?.message || '';
-    if (errorMessage.includes('Invalid object name') && errorMessage.includes('Kullanici_Engel')) {
-      console.warn('Kullanici_Engel table missing, skipping reverse block check');
+    if (
+      (errorMessage.includes('Invalid object name') && errorMessage.includes('Kullanici_Engel')) ||
+      errorMessage.includes("Invalid column name 'aktif'")
+    ) {
+      console.warn('Kullanici_Engel table/aktif column missing, skipping reverse block check');
       // Engel kontrolü yokmuş gibi devam et
-    } else {
-      // Diğer hatalar için normal hatayı fırlat
+    } else if (errorMessage.includes('Bu kullanıcıya mesaj gönderemezsiniz')) {
+      // Bu bizim fırlattığımız hata, yukarı fırlat
       throw err;
+    } else {
+      // Diğer hatalar için engel kontrolünü atla (tablo/kolon yoksa)
+      console.warn('Reverse engel kontrolü atlandı (tablo/kolon mevcut değil):', errorMessage);
     }
   }
 
@@ -379,42 +462,48 @@ export async function sendMessage(
   // roomId'yi return edilecek mesaj objesine ekle (socket emit için)
   const messageWithRoomId = { roomId };
 
-  // Mesajlasma tablosunda alici_id kolonu var mı kontrol et
-  const hasAliciId = await pool
-    .request()
-    .query(`
-      SELECT COL_LENGTH('dbo.Mesajlasma', 'alici_id') AS hasAliciId
-    `);
-
-  const hasAliciIdCol = hasAliciId.recordset[0]?.hasAliciId !== null;
-
-  // Mesajı ekle
-  let insertQuery: string;
-  if (hasAliciIdCol) {
-    insertQuery = `
-      INSERT INTO dbo.Mesajlasma (mesajlasma_id, gonderen_id, alici_id, mesaj, okundu, tarih)
-      OUTPUT INSERTED.mesaj_id, INSERTED.gonderen_id, INSERTED.alici_id, INSERTED.mesaj, INSERTED.tarih
-      VALUES (@mesajlasma_id, @gonderen_id, @alici_id, @mesaj, 0, GETDATE())
-    `;
-  } else {
-    insertQuery = `
-      INSERT INTO dbo.Mesajlasma (mesajlasma_id, gonderen_id, mesaj, okundu, tarih)
-      OUTPUT INSERTED.mesaj_id, INSERTED.gonderen_id, INSERTED.mesaj, INSERTED.tarih
-      VALUES (@mesajlasma_id, @gonderen_id, @mesaj, 0, GETDATE())
-    `;
-  }
+  // Mesajı ekle - sabit kolon adları kullan (alici_id YOK, oda tablosundan bulunmalı)
+  const insertQuery = `
+    INSERT INTO dbo.Mesajlasma (
+      ${MESAJLASMA_COLS.oda_id},
+      ${MESAJLASMA_COLS.gonderen_kullanici},
+      ${MESAJLASMA_COLS.mesaj},
+      ${MESAJLASMA_COLS.tarih}
+    )
+    OUTPUT 
+      INSERTED.${MESAJLASMA_COLS.mesaj_id} AS mesaj_id,
+      INSERTED.${MESAJLASMA_COLS.gonderen_kullanici} AS gonderen_id,
+      INSERTED.${MESAJLASMA_COLS.mesaj} AS mesaj,
+      INSERTED.${MESAJLASMA_COLS.tarih} AS tarih
+    VALUES (
+      @oda_id,
+      @gonderen_kullanici,
+      @mesaj,
+      GETDATE()
+    )
+  `;
 
   const request = pool
     .request()
-    .input('mesajlasma_id', sql.Int, roomId)
-    .input('gonderen_id', sql.Int, currentUserId)
+    .input('oda_id', sql.Int, roomId)
+    .input('gonderen_kullanici', sql.Int, currentUserId)
     .input('mesaj', sql.NVarChar(sql.MAX), text.trim());
 
-  if (hasAliciIdCol) {
-    request.input('alici_id', sql.Int, toUserId);
+  let result;
+  try {
+    result = await request.query(insertQuery);
+  } catch (err: any) {
+    console.error('[DM][POST /messages][SQL ERROR] INSERT Mesajlasma:', {
+      message: err?.message,
+      number: err?.originalError?.number,
+      code: err?.code || err?.originalError?.code,
+      proc: err?.originalError?.procName,
+      line: err?.originalError?.lineNumber,
+      serverName: err?.originalError?.serverName,
+      query: insertQuery.substring(0, 200),
+    });
+    throw err;
   }
-
-  const result = await request.query(insertQuery);
 
   if (result.recordset.length === 0) {
     throw new Error('Mesaj gönderilemedi');
@@ -437,10 +526,11 @@ export async function sendMessage(
     console.error('❌ DM bildirim oluşturulurken hata (mesaj yine de gönderildi):', err?.message);
   }
 
+  // OUTPUT'tan dönen kolonları oku (AS alias kullanıldığı için direkt alias adları ile okunabilir)
   const messageResult: any = {
     mesaj_id: row.mesaj_id,
     gonderen_id: row.gonderen_id,
-    alici_id: hasAliciIdCol ? row.alici_id : toUserId,
+    alici_id: toUserId,  // alici_id kolonu yok, toUserId kullan
     mesaj: row.mesaj,
     tarih: row.tarih,
     okundu_by_sender: true, // Gönderen mesajı gönderdiği için okundu sayılır
@@ -456,8 +546,9 @@ export async function sendMessage(
  * Mesajları okundu işaretle
  * 
  * Body'de { mesajlasmaId } veya { withUserId } gelebilir
- * Eğer withUserId geldiyse önce odaId'yi Mesajlasma_Oda'dan bul
- * Sonra okundu güncelle: UPDATE dbo.Mesajlasma SET okundu=1 WHERE mesajlasma_id=@odaId AND alici_id=@me AND okundu=0
+ * Eğer withUserId geldiyse önce odaId'yi Mesaj_Oda'dan bul
+ * Sonra okundu güncelle: UPDATE dbo.Mesajlasma SET okundu=1 WHERE oda_id=@odaId AND gonderen_kullanici!=@me AND okundu=0
+ * Not: alici_id kolonu yok, sadece gonderen_kullanici != @me ile filtrele
  */
 export async function markMessagesAsRead(
   currentUserId: number,
@@ -473,26 +564,41 @@ export async function markMessagesAsRead(
     if (mesajlasmaId) {
       odaId = Number(mesajlasmaId);
     } 
-    // Eğer withUserId gelmişse önce odaId'yi bul
-    else if (withUserId) {
+      // Eğer withUserId gelmişse önce odaId'yi bul
+      else if (withUserId) {
+      // Kolon adını keşfet
+      const schemaCheck = await pool
+        .request()
+        .query(`
+          SELECT COLUMN_NAME
+          FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'Mesaj_Oda'
+          ORDER BY ORDINAL_POSITION
+        `);
+      
+      const columns = schemaCheck.recordset.map((row: any) => row.COLUMN_NAME.toLowerCase());
+      const roomIdCol = columns.find((col: string) => 
+        col === 'oda_id' || col.includes('mesajlasma_id') || col === 'id'
+      ) || 'oda_id'; // Fallback
+
       const roomResult = await pool
         .request()
         .input('me', sql.Int, currentUserId)
         .input('other', sql.Int, Number(withUserId))
         .query(`
-          SELECT TOP 1 mesajlasma_id
-          FROM dbo.Mesajlasma_Oda
+          SELECT TOP 1 [${roomIdCol}] AS odaId
+          FROM dbo.Mesaj_Oda
           WHERE (kullanici1_id = @me AND kullanici2_id = @other)
              OR (kullanici1_id = @other AND kullanici2_id = @me)
         `);
 
-      if (roomResult.recordset.length === 0 || !roomResult.recordset[0].mesajlasma_id) {
+      if (roomResult.recordset.length === 0 || !roomResult.recordset[0].odaId) {
         // Oda yoksa işlem yapılacak bir şey yok
         console.log(`⚠️ markMessagesAsRead - Room not found for users: ${currentUserId} <-> ${withUserId}`);
         return;
       }
 
-      odaId = Number(roomResult.recordset[0].mesajlasma_id);
+      odaId = Number(roomResult.recordset[0].odaId);
     } else {
       // Hiçbiri verilmemişse hata
       throw new Error('mesajlasmaId veya withUserId zorunludur');
@@ -503,19 +609,20 @@ export async function markMessagesAsRead(
       return;
     }
 
-    // Okundu güncelle
-    // UPDATE dbo.Mesajlasma SET okundu=1 WHERE mesajlasma_id=@odaId AND alici_id=@me AND okundu=0
+    // Okundu güncelle - sabit kolon adları kullan (alici_id yok, sadece oda_id ile filtrele)
+    const updateQuery = `
+      UPDATE dbo.Mesajlasma
+      SET ${MESAJLASMA_COLS.okundu} = 1
+      WHERE ${MESAJLASMA_COLS.oda_id} = @oda_id
+        AND ${MESAJLASMA_COLS.gonderen_kullanici} != @me  -- Gönderen kendisi değilse
+        AND ${MESAJLASMA_COLS.okundu} = 0
+    `;
+
     const updateResult = await pool
       .request()
-      .input('mesajlasma_id', sql.Int, odaId)
+      .input('oda_id', sql.Int, odaId)
       .input('me', sql.Int, currentUserId)
-      .query(`
-        UPDATE dbo.Mesajlasma
-        SET okundu = 1
-        WHERE mesajlasma_id = @mesajlasma_id
-          AND alici_id = @me
-          AND okundu = 0
-      `);
+      .query(updateQuery);
 
     const updatedCount = updateResult.rowsAffected[0] || 0;
     console.log(`✅ markMessagesAsRead - Updated ${updatedCount} messages as read (odaId: ${odaId}, me: ${currentUserId})`);
@@ -623,26 +730,44 @@ export async function blockUser(
     `);
 
   if (existing.recordset.length > 0) {
-    // Aktif yap
+    // Mevcut kaydı güncelle (aktif kolonu yoksa sadece tarih güncelle)
     await pool
       .request()
       .input('engelleyen_id', sql.Int, currentUserId)
       .input('engellenen_id', sql.Int, targetUserId)
       .query(`
         UPDATE dbo.Kullanici_Engel
-        SET aktif = 1, tarih = GETDATE()
+        SET tarih = GETDATE()
         WHERE engelleyen_id = @engelleyen_id AND engellenen_id = @engellenen_id
       `);
   } else {
-    // Yeni kayıt ekle
-    await pool
-      .request()
-      .input('engelleyen_id', sql.Int, currentUserId)
-      .input('engellenen_id', sql.Int, targetUserId)
-      .query(`
-        INSERT INTO dbo.Kullanici_Engel (engelleyen_id, engellenen_id, tarih, aktif)
-        VALUES (@engelleyen_id, @engellenen_id, GETDATE(), 1)
-      `);
+    // Yeni kayıt ekle (aktif kolonu yoksa sadece zorunlu kolonları ekle)
+    try {
+      await pool
+        .request()
+        .input('engelleyen_id', sql.Int, currentUserId)
+        .input('engellenen_id', sql.Int, targetUserId)
+        .query(`
+          INSERT INTO dbo.Kullanici_Engel (engelleyen_id, engellenen_id, tarih)
+          VALUES (@engelleyen_id, @engellenen_id, GETDATE())
+        `);
+    } catch (err: any) {
+      // aktif kolonu varsa onu da ekle (INSERT hatası alınırsa)
+      const errorMessage = err?.message || err?.originalError?.message || '';
+      if (errorMessage.includes('column') || errorMessage.includes('NULL')) {
+        // Kolon eksik hatası alındıysa aktif kolonu da ekle
+        await pool
+          .request()
+          .input('engelleyen_id', sql.Int, currentUserId)
+          .input('engellenen_id', sql.Int, targetUserId)
+          .query(`
+            INSERT INTO dbo.Kullanici_Engel (engelleyen_id, engellenen_id, tarih, aktif)
+            VALUES (@engelleyen_id, @engellenen_id, GETDATE(), 1)
+          `);
+      } else {
+        throw err;
+      }
+    }
   }
 }
 
@@ -655,13 +780,13 @@ export async function unblockUser(
 ): Promise<void> {
   const pool = await getPool();
 
+  // aktif kolonu yoksa kaydı sil
   await pool
     .request()
     .input('engelleyen_id', sql.Int, currentUserId)
     .input('engellenen_id', sql.Int, targetUserId)
     .query(`
-      UPDATE dbo.Kullanici_Engel
-      SET aktif = 0
+      DELETE FROM dbo.Kullanici_Engel
       WHERE engelleyen_id = @engelleyen_id AND engellenen_id = @engellenen_id
     `);
 }
@@ -675,17 +800,30 @@ export async function isBlocked(
 ): Promise<boolean> {
   const pool = await getPool();
 
-  const result = await pool
-    .request()
-    .input('engelleyen_id', sql.Int, currentUserId)
-    .input('engellenen_id', sql.Int, targetUserId)
-    .query(`
-      SELECT engel_id FROM dbo.Kullanici_Engel
-      WHERE engelleyen_id = @engelleyen_id 
-        AND engellenen_id = @engellenen_id 
-        AND aktif = 1
-    `);
+  // aktif kolonu yoksa sadece kayıt var mı kontrol et
+  try {
+    const result = await pool
+      .request()
+      .input('engelleyen_id', sql.Int, currentUserId)
+      .input('engellenen_id', sql.Int, targetUserId)
+      .query(`
+        SELECT engel_id FROM dbo.Kullanici_Engel
+        WHERE engelleyen_id = @engelleyen_id 
+          AND engellenen_id = @engellenen_id
+      `);
 
-  return result.recordset.length > 0;
+    return result.recordset.length > 0;
+  } catch (err: any) {
+    // aktif kolonu yoksa veya tablo yoksa false dön
+    const errorMessage = err?.message || err?.originalError?.message || '';
+    if (
+      errorMessage.includes('Invalid column name') ||
+      (errorMessage.includes('Invalid object name') && errorMessage.includes('Kullanici_Engel'))
+    ) {
+      console.warn('[isBlocked] Kullanici_Engel table/aktif column missing, returning false');
+      return false;
+    }
+    throw err;
+  }
 }
 

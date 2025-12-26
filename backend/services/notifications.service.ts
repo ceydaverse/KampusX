@@ -137,6 +137,7 @@ export async function getNotificationsByUserId(
         ORDER BY m.tarih DESC
       ))
     )
+      AND (k.silindi = 0 OR k.silindi IS NULL)
     WHERE b.kullanici_id = @userId
   `;
 
@@ -293,6 +294,7 @@ export async function getUserDisplayName(userId: number): Promise<string> {
         COALESCE(kullanici_adi, ad + ' ' + soyad, 'Kullanıcı ' + CAST(kullanici_id AS VARCHAR)) AS display_name
       FROM ${T.Kullanicilar}
       WHERE kullanici_id = @kullanici_id
+        AND (silindi = 0 OR silindi IS NULL)
     `);
 
   if (result.recordset.length === 0) {

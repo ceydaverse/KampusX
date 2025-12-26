@@ -140,19 +140,50 @@ export async function createAnswer(input: CreateAnswerInput): Promise<Answer> {
     throw new Error('Soru bulunamadı');
   }
 
-  const insertResult = await pool
+  // OUTPUT INSERTED direkt kullanılamaz (trigger varsa). OUTPUT INTO @Inserted kullan.
+  const request = pool
     .request()
     .input('soru_id', sql.Int, input.soru_id)
     .input('kullanici_id', sql.Int, input.kullanici_id)
-    .input('cevap_metin', sql.NVarChar(sql.MAX), input.cevap_metin)
+    .input('cevap_metin', sql.NVarChar(sql.MAX), input.cevap_metin);
+
+  const insertSql = `
+    DECLARE @Inserted TABLE (cevap_id INT);
+    
+    INSERT INTO ${T.Cevaplar} (soru_id, kullanici_id, cevap_metin, tarih)
+    OUTPUT INSERTED.cevap_id INTO @Inserted(cevap_id)
+    VALUES (@soru_id, @kullanici_id, @cevap_metin, GETDATE());
+    
+    SELECT cevap_id FROM @Inserted;
+  `;
+
+  const insertResult = await request.query(insertSql);
+  const insertedId = insertResult.recordset?.[0]?.cevap_id;
+
+  if (!insertedId) {
+    throw new Error("Cevap eklendi ama cevap_id dönmedi.");
+  }
+
+  // Insert sonrası cevabı çek (tüm alanları almak için)
+  const answerResult = await pool
+    .request()
+    .input('cevap_id', sql.Int, insertedId)
     .query(`
-      INSERT INTO ${T.Cevaplar} (soru_id, kullanici_id, cevap_metin, tarih)
-      OUTPUT INSERTED.cevap_id, INSERTED.soru_id, INSERTED.kullanici_id, 
-             INSERTED.cevap_metin, INSERTED.tarih
-      VALUES (@soru_id, @kullanici_id, @cevap_metin, GETDATE())
+      SELECT TOP 1 
+        cevap_id,
+        soru_id,
+        kullanici_id,
+        cevap_metin,
+        tarih
+      FROM ${T.Cevaplar}
+      WHERE cevap_id = @cevap_id
     `);
 
-  const row = insertResult.recordset[0];
+  if (answerResult.recordset.length === 0) {
+    throw new Error("Cevap eklendi ama sonrasında bulunamadı.");
+  }
+
+  const row = answerResult.recordset[0];
   
   // Bildirim oluştur (soru sahibine)
   try {

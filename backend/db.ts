@@ -48,7 +48,9 @@ function getSqlConfig(): sql.config {
       encrypt: false,
       trustServerCertificate: true,
       enableArithAbort: true,
+      requestTimeout: 60000, // 60 saniye
     },
+    connectionTimeout: 30000, // 30 saniye
     pool: {
       max: 10,
       min: 0,
