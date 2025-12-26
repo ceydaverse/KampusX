@@ -3,7 +3,6 @@ import styles from "./MainLayout.module.css";
 
 // Default export edilen bileşenleri alıyoruz
 import Header from "./components/Header/Header";
-import AgendaPanel from "./components/AgendaPanel/AgendaPanel";
 import { CategoryBoard } from "./components/CategoryBoard/CategoryBoard";
 import Footer from "./components/Footer/Footer";
 
@@ -13,12 +12,8 @@ const MainLayout: React.FC = () => {
       {/* Üst kısım: başlık barı */}
       <Header />
 
-      {/* Alt kısım: sol GÜNDEM, sağ Kategoriler */}
+      {/* Alt kısım: Kategoriler */}
       <main className={styles.main}>
-        <section className={styles.agendaSection}>
-          <AgendaPanel />
-        </section>
-
         <section className={styles.categorySection}>
           <CategoryBoard />
         </section>

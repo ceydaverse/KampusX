@@ -1,4 +1,5 @@
 import { getPool, sql } from '../db';
+import { T } from '../constants/tables';
 
 export interface Category {
   kategori_id: number;
@@ -14,7 +15,7 @@ export async function getAllCategories(): Promise<Category[]> {
   try {
     const result = await pool.request().query(`
       SELECT kategori_id, kategori_adi, ana_kategori_id
-      FROM Forum.Kategoriler
+      FROM ${T.Kategoriler}
       ORDER BY kategori_id
     `);
 
@@ -24,7 +25,7 @@ export async function getAllCategories(): Promise<Category[]> {
     if (err?.message?.includes('ana_kategori_id') || err?.originalError?.message?.includes('ana_kategori_id')) {
       const result = await pool.request().query(`
         SELECT kategori_id, kategori_adi, NULL AS ana_kategori_id
-        FROM Forum.Kategoriler
+        FROM ${T.Kategoriler}
         ORDER BY kategori_id
       `);
 
@@ -44,7 +45,7 @@ export async function getSubCategoriesByParentId(anaKategoriId: number): Promise
       .input('ana_kategori_id', sql.Int, anaKategoriId)
       .query(`
         SELECT kategori_id, kategori_adi, ana_kategori_id
-        FROM Forum.Kategoriler
+        FROM ${T.Kategoriler}
         WHERE ana_kategori_id = @ana_kategori_id
         ORDER BY kategori_id
       `);
@@ -56,7 +57,7 @@ export async function getSubCategoriesByParentId(anaKategoriId: number): Promise
       // Kolon yoksa, tüm kategorileri döndür (filtreleme yapamayız)
       const result = await pool.request().query(`
         SELECT kategori_id, kategori_adi, NULL AS ana_kategori_id
-        FROM Forum.Kategoriler
+        FROM ${T.Kategoriler}
         ORDER BY kategori_id
       `);
 

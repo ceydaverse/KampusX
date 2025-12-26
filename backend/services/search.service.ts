@@ -1,4 +1,5 @@
 import { getPool, sql } from '../db';
+import { T } from '../constants/tables';
 
 export type SearchResultType = 'question' | 'user' | 'group' | 'category';
 
@@ -31,8 +32,8 @@ export async function searchAll(q: string, limit = 10): Promise<SearchResult[]> 
         LEFT(ISNULL(s.soru_metin, ''), 160) AS snippet,
         s.kategori_id AS categoryId,
         k.kategori_adi AS categoryName
-      FROM Forum.Sorular s
-      LEFT JOIN Forum.Kategoriler k ON s.kategori_id = k.kategori_id
+      FROM ${T.Sorular} s
+      LEFT JOIN ${T.Kategoriler} k ON s.kategori_id = k.kategori_id
       WHERE 
         LOWER(ISNULL(s.baslik, '')) LIKE @pattern
         OR LOWER(ISNULL(s.soru_metin, '')) LIKE @pattern
@@ -49,7 +50,7 @@ export async function searchAll(q: string, limit = 10): Promise<SearchResult[]> 
         CONCAT(ISNULL(k.ad, ''), ' ', ISNULL(k.soyad, '')) AS snippet,
         NULL AS categoryId,
         NULL AS categoryName
-      FROM dbo.Kullanicilar k
+      FROM ${T.Kullanicilar} k
       WHERE 
         LOWER(ISNULL(k.kullanici_adi, '')) LIKE @pattern
         OR LOWER(CONCAT(ISNULL(k.ad, ''), ' ', ISNULL(k.soyad, ''))) LIKE @pattern
@@ -64,7 +65,7 @@ export async function searchAll(q: string, limit = 10): Promise<SearchResult[]> 
         NULL AS snippet,
         NULL AS categoryId,
         NULL AS categoryName
-      FROM dbo.Gruplar g
+      FROM ${T.Gruplar} g
       WHERE LOWER(ISNULL(g.grup_adi, '')) LIKE @pattern
 
       UNION ALL
@@ -77,7 +78,7 @@ export async function searchAll(q: string, limit = 10): Promise<SearchResult[]> 
         NULL AS snippet,
         NULL AS categoryId,
         NULL AS categoryName
-      FROM Forum.Kategoriler c
+      FROM ${T.Kategoriler} c
       WHERE LOWER(ISNULL(c.kategori_adi, '')) LIKE @pattern
     ) AS combined
     ORDER BY 

@@ -1,4 +1,5 @@
 import { getPool, sql } from '../db';
+import { T } from '../constants/tables';
 import { getIO } from '../socket/realtime';
 
 export interface Notification {
@@ -44,7 +45,7 @@ export async function createNotification(payload: {
       .input('mesaj', sql.NVarChar(sql.MAX), payload.mesaj)
       .input('tip', sql.NVarChar(50), payload.tip)
       .query(`
-        INSERT INTO dbo.Bildirimler (kullanici_id, soru_id, cevap_id, mesaj, tip, tarih, okundu)
+        INSERT INTO ${T.Bildirimler} (kullanici_id, soru_id, cevap_id, mesaj, tip, tarih, okundu)
         OUTPUT INSERTED.bildirim_id, INSERTED.kullanici_id, INSERTED.soru_id, INSERTED.cevap_id, 
                INSERTED.mesaj, INSERTED.tip, INSERTED.tarih, INSERTED.okundu
         VALUES (@kullanici_id, @soru_id, @cevap_id, @mesaj, @tip, GETDATE(), 0)
@@ -115,23 +116,23 @@ export async function getNotificationsByUserId(
       k.kullanici_adi AS actor_username,
       k.ad AS actor_ad,
       k.soyad AS actor_soyad
-    FROM dbo.Bildirimler b
-    LEFT JOIN dbo.Kullanicilar k ON (
+    FROM ${T.Bildirimler} b
+    LEFT JOIN ${T.Kullanicilar} k ON (
       (b.tip = 'cevap' AND k.kullanici_id IN (
-        SELECT c.kullanici_id FROM Forum.Cevaplar c WHERE c.cevap_id = b.cevap_id
+        SELECT c.kullanici_id FROM ${T.Cevaplar} c WHERE c.cevap_id = b.cevap_id
       ))
       OR (b.tip = 'soru_begeni' AND k.kullanici_id IN (
-        SELECT sb.kullanici_id FROM Sosyal.SoruBegeniler sb 
+        SELECT sb.kullanici_id FROM ${T.SoruBegeniler} sb 
         WHERE sb.soru_id = b.soru_id AND sb.kullanici_id != b.kullanici_id
         ORDER BY sb.tarih DESC
       ))
       OR (b.tip = 'cevap_begeni' AND k.kullanici_id IN (
-        SELECT cb.kullanici_id FROM Sosyal.CevapBegeniler cb 
+        SELECT cb.kullanici_id FROM ${T.CevapBegeniler} cb 
         WHERE cb.cevap_id = b.cevap_id AND cb.kullanici_id != b.kullanici_id
         ORDER BY cb.tarih DESC
       ))
       OR (b.tip = 'mesaj' AND k.kullanici_id IN (
-        SELECT m.gonderen_id FROM dbo.Mesajlasma m 
+        SELECT m.gonderen_id FROM ${T.Mesajlasma} m 
         WHERE m.alici_id = b.kullanici_id
         ORDER BY m.tarih DESC
       ))
@@ -191,7 +192,7 @@ export async function getUnreadCount(userId: number): Promise<number> {
     .input('userId', sql.Int, userId)
     .query(`
       SELECT COUNT(*) AS count
-      FROM dbo.Bildirimler
+      FROM ${T.Bildirimler}
       WHERE kullanici_id = @userId AND okundu = 0
     `);
 
@@ -212,7 +213,7 @@ export async function markNotificationAsRead(
     .input('bildirim_id', sql.Int, notificationId)
     .input('kullanici_id', sql.Int, userId)
     .query(`
-      UPDATE dbo.Bildirimler
+      UPDATE ${T.Bildirimler}
       SET okundu = 1, okundu_tarih = GETDATE()
       WHERE bildirim_id = @bildirim_id AND kullanici_id = @kullanici_id
     `);
@@ -230,7 +231,7 @@ export async function markAllNotificationsAsRead(userId: number): Promise<number
     .request()
     .input('kullanici_id', sql.Int, userId)
     .query(`
-      UPDATE dbo.Bildirimler
+      UPDATE ${T.Bildirimler}
       SET okundu = 1, okundu_tarih = GETDATE()
       WHERE kullanici_id = @kullanici_id AND okundu = 0
     `);
@@ -248,7 +249,7 @@ export async function getQuestionOwnerId(soruId: number): Promise<number | null>
     .request()
     .input('soru_id', sql.Int, soruId)
     .query(`
-      SELECT kullanici_id FROM Forum.Sorular WHERE soru_id = @soru_id
+      SELECT kullanici_id FROM ${T.Sorular} WHERE soru_id = @soru_id
     `);
 
   if (result.recordset.length === 0) {
@@ -268,7 +269,7 @@ export async function getAnswerOwnerId(cevapId: number): Promise<number | null> 
     .request()
     .input('cevap_id', sql.Int, cevapId)
     .query(`
-      SELECT kullanici_id FROM Forum.Cevaplar WHERE cevap_id = @cevap_id
+      SELECT kullanici_id FROM ${T.Cevaplar} WHERE cevap_id = @cevap_id
     `);
 
   if (result.recordset.length === 0) {
@@ -290,7 +291,7 @@ export async function getUserDisplayName(userId: number): Promise<string> {
     .query(`
       SELECT 
         COALESCE(kullanici_adi, ad + ' ' + soyad, 'Kullanıcı ' + CAST(kullanici_id AS VARCHAR)) AS display_name
-      FROM dbo.Kullanicilar
+      FROM ${T.Kullanicilar}
       WHERE kullanici_id = @kullanici_id
     `);
 

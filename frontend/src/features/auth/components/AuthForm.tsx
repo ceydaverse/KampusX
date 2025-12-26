@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import axios from "axios";
 import { login, register, type AuthResponse } from "../authApi";
 import { useAuth } from "../AuthProvider";
 import { saveToken } from "../authStorage";
@@ -36,7 +37,9 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
 
   const [formData, setFormData] = useState<FormState>(initialState);
   const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [usernameSuggestion, setUsernameSuggestion] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const navigate = useNavigate();
@@ -51,12 +54,24 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
 
   const setField =
     (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) => {
-      setFormData((prev) => ({ ...prev, [key]: e.target.value }));
+      let value = e.target.value;
+      
+      // kullanici_adi için sadece lowercase (trim submit'te yapılacak)
+      if (key === "kullanici_adi") {
+        value = value.toLowerCase();
+      }
+      
+      setFormData((prev) => ({ ...prev, [key]: value }));
+      // Username suggestion'ı temizle kullanıcı yazarken
+      if (key === "kullanici_adi") {
+        setUsernameSuggestion(null);
+      }
     };
 
   const resetAlerts = () => {
     setError(null);
     setSuccessMessage(null);
+    setUsernameSuggestion(null);
   };
 
   const validate = (): string | null => {
@@ -66,7 +81,10 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
     if (isRegister) {
       if (!formData.ad.trim()) return "Ad zorunludur.";
       if (!formData.soyad.trim()) return "Soyad zorunludur.";
-      if (!formData.kullanici_adi.trim()) return "Kullanıcı adı zorunludur.";
+      
+      // kullanici_adi boş olamaz ve trim edilmiş olmalı
+      const trimmedUsername = formData.kullanici_adi.trim().toLowerCase();
+      if (!trimmedUsername) return "Kullanıcı adı zorunludur.";
     }
 
     return null;
@@ -74,6 +92,12 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Çift submit önleme
+    if (isSubmitting) {
+      return;
+    }
+
     resetAlerts();
 
     const v = validate();
@@ -82,17 +106,22 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
       return;
     }
 
+    setIsSubmitting(true);
     setLoading(true);
+    
     try {
       if (isRegister) {
         // ----------- KAYIT OL -----------
+        // Backend'in beklediği format: kullanici_adi, password veya sifre
+        const trimmedUsername = formData.kullanici_adi.trim().toLowerCase();
+        
         const response: AuthResponse = await register({
           ad: formData.ad.trim(),
           soyad: formData.soyad.trim(),
-          kullanici_adi: formData.kullanici_adi.trim(),
-          email: formData.email.trim(),
+          kullanici_adi: trimmedUsername,
+          email: formData.email.trim().toLowerCase(),
           password: formData.password,
-          // opsiyonel alanlar (backend beklemiyorsa authApi içinde ignore edilebilir)
+          // opsiyonel alanlar
           universite: null,
           bolum: null,
           cinsiyet: null,
@@ -103,7 +132,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
           setSuccessMessage("Kayıt başarılı! Artık giriş yapabilirsiniz.");
           // login tabına geçir
           onTabChange?.("login");
-          // şifreyi koruyup email’i koruyarak kullanıcıyı hızlı girişe yöneltmek için
+          // şifreyi koruyup email'i koruyarak kullanıcıyı hızlı girişe yöneltmek için
           setFormData((prev) => ({
             ...prev,
             password: "",
@@ -140,12 +169,37 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
         }
       }
     } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        "Beklenmeyen bir hata oluştu.";
-      setError(msg);
+      // Axios error handling
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status;
+        const errorData = err.response?.data;
+
+        if (status === 409) {
+          // Kullanıcı adı veya email alınmış
+          const errorMsg = errorData?.message || "Kullanıcı adı veya email alınmış.";
+          setError(errorMsg);
+
+          // Username çakışmasıysa öneri üret
+          if (isRegister && (errorMsg.includes("kullanıcı adı") || errorMsg.toLowerCase().includes("username"))) {
+            const trimmedUsername = formData.kullanici_adi.trim().toLowerCase();
+            const suggestion = `${trimmedUsername}_${Math.floor(1000 + Math.random() * 9000)}`;
+            setUsernameSuggestion(suggestion);
+          }
+        } else if (status === 400 || status === 422) {
+          // Validation hatası
+          const errorMsg = errorData?.message || errorData?.detail || "Girilen bilgiler hatalı.";
+          setError(errorMsg);
+        } else {
+          // Diğer sunucu hataları
+          setError(errorData?.message || "Sunucu hatası");
+        }
+      } else {
+        // Axios error değilse genel hata
+        const msg = err?.message || "Beklenmeyen bir hata oluştu.";
+        setError(msg);
+      }
     } finally {
+      setIsSubmitting(false);
       setLoading(false);
     }
   };
@@ -155,7 +209,35 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
       <form className="auth-form" onSubmit={handleSubmit}>
         <h2 className="auth-title">{isRegister ? "Kayıt Ol" : "Giriş Yap"}</h2>
 
-        {error && <div className="auth-alert auth-alert-error">{error}</div>}
+        {error && (
+          <div className="auth-alert auth-alert-error">
+            {error}
+            {usernameSuggestion && (
+              <div style={{ marginTop: "8px", fontSize: "0.9em", color: "#666" }}>
+                Şunu deneyebilirsin: <strong>{usernameSuggestion}</strong>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData((prev) => ({ ...prev, kullanici_adi: usernameSuggestion }));
+                    setUsernameSuggestion(null);
+                  }}
+                  style={{
+                    marginLeft: "8px",
+                    padding: "2px 8px",
+                    fontSize: "0.85em",
+                    background: "#007bff",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Kullan
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {successMessage && (
           <div className="auth-alert auth-alert-success">{successMessage}</div>
         )}
@@ -192,6 +274,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
                 onChange={setField("kullanici_adi")}
                 placeholder="kullanici_adi"
                 autoComplete="username"
+                style={{ textTransform: "lowercase" }}
               />
             </div>
           </>
@@ -219,8 +302,8 @@ const AuthForm: React.FC<AuthFormProps> = ({ activeTab, onTabChange }) => {
           />
         </div>
 
-        <button className="auth-submit" type="submit" disabled={loading}>
-          {loading ? "Lütfen bekleyin..." : isRegister ? "Kayıt Ol" : "Giriş Yap"}
+        <button className="auth-submit" type="submit" disabled={isSubmitting || loading}>
+          {loading || isSubmitting ? "Lütfen bekleyin..." : isRegister ? "Kayıt Ol" : "Giriş Yap"}
         </button>
 
         <div className="auth-footer">

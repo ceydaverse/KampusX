@@ -20,6 +20,7 @@ export interface RegisterRequest {
   soyad: string;
   email: string;
   password: string;
+  kullanici_adi?: string;
   universite?: string | null;
   bolum?: string | null;
   cinsiyet?: string | null;
@@ -47,13 +48,24 @@ export async function login(credentials: LoginRequest): Promise<AuthResponse> {
 
 export async function register(data: RegisterRequest): Promise<AuthResponse> {
   try {
-    const response = await api.post<AuthResponse>("/api/auth/register", data);
+    // Backend hem password hem sifre kabul ediyor, sifre gönderiyoruz
+    const payload: any = {
+      ad: data.ad,
+      soyad: data.soyad,
+      email: data.email,
+      sifre: data.password, // Backend password veya sifre kabul ediyor
+      kullanici_adi: data.kullanici_adi,
+      universite: data.universite,
+      bolum: data.bolum,
+      cinsiyet: data.cinsiyet,
+      dogum_yili: data.dogum_yili,
+    };
+    
+    const response = await api.post<AuthResponse>("/api/auth/register", payload);
     return response.data;
   } catch (err: any) {
-    throw {
-      message: err?.response?.data?.message || "Kayıt olurken bir hata oluştu.",
-      response: err?.response,
-    };
+    // Axios error'ı olduğu gibi fırlat (response ile birlikte)
+    throw err;
   }
 }
 

@@ -1,4 +1,5 @@
 import { getPool, sql } from '../db';
+import { T } from '../constants/tables';
 import { createNotification, getQuestionOwnerId, getAnswerOwnerId, getUserDisplayName } from './notifications.service';
 
 /**
@@ -17,7 +18,7 @@ export async function toggleQuestionLike(
     .input('kullanici_id', sql.Int, kullaniciId)
     .query(`
       SELECT 1 
-      FROM Sosyal.SoruBegeniler 
+      FROM ${T.SoruBegeniler} 
       WHERE soru_id = @soru_id AND kullanici_id = @kullanici_id
     `);
 
@@ -30,7 +31,7 @@ export async function toggleQuestionLike(
       .input('soru_id', sql.Int, soruId)
       .input('kullanici_id', sql.Int, kullaniciId)
       .query(`
-        DELETE FROM Sosyal.SoruBegeniler 
+        DELETE FROM ${T.SoruBegeniler} 
         WHERE soru_id = @soru_id AND kullanici_id = @kullanici_id
       `);
   } else {
@@ -40,7 +41,7 @@ export async function toggleQuestionLike(
       .input('soru_id', sql.Int, soruId)
       .input('kullanici_id', sql.Int, kullaniciId)
       .query(`
-        INSERT INTO Sosyal.SoruBegeniler (soru_id, kullanici_id, tarih)
+        INSERT INTO ${T.SoruBegeniler} (soru_id, kullanici_id, tarih)
         VALUES (@soru_id, @kullanici_id, GETDATE())
       `);
 
@@ -68,7 +69,7 @@ export async function toggleQuestionLike(
     .input('soru_id', sql.Int, soruId)
     .query(`
       SELECT COUNT(*) AS likeCount 
-      FROM Sosyal.SoruBegeniler 
+      FROM ${T.SoruBegeniler} 
       WHERE soru_id = @soru_id
     `);
 
@@ -96,7 +97,7 @@ export async function toggleAnswerLike(
     .input('kullanici_id', sql.Int, kullaniciId)
     .query(`
       SELECT 1 
-      FROM Sosyal.CevapBegeniler 
+      FROM ${T.CevapBegeniler} 
       WHERE cevap_id = @cevap_id AND kullanici_id = @kullanici_id
     `);
 
@@ -109,7 +110,7 @@ export async function toggleAnswerLike(
       .input('cevap_id', sql.Int, cevapId)
       .input('kullanici_id', sql.Int, kullaniciId)
       .query(`
-        DELETE FROM Sosyal.CevapBegeniler 
+        DELETE FROM ${T.CevapBegeniler} 
         WHERE cevap_id = @cevap_id AND kullanici_id = @kullanici_id
       `);
   } else {
@@ -119,7 +120,7 @@ export async function toggleAnswerLike(
       .input('cevap_id', sql.Int, cevapId)
       .input('kullanici_id', sql.Int, kullaniciId)
       .query(`
-        INSERT INTO Sosyal.CevapBegeniler (cevap_id, kullanici_id, tarih)
+        INSERT INTO ${T.CevapBegeniler} (cevap_id, kullanici_id, tarih)
         VALUES (@cevap_id, @kullanici_id, GETDATE())
       `);
 
@@ -131,7 +132,7 @@ export async function toggleAnswerLike(
         const answerInfo = await pool
           .request()
           .input('cevap_id', sql.Int, cevapId)
-          .query(`SELECT soru_id FROM Forum.Cevaplar WHERE cevap_id = @cevap_id`);
+          .query(`SELECT soru_id FROM ${T.Cevaplar} WHERE cevap_id = @cevap_id`);
 
         const soruId = answerInfo.recordset[0]?.soru_id || null;
         const actorName = await getUserDisplayName(kullaniciId);
@@ -154,7 +155,7 @@ export async function toggleAnswerLike(
     .input('cevap_id', sql.Int, cevapId)
     .query(`
       SELECT COUNT(*) AS likeCount 
-      FROM Sosyal.CevapBegeniler 
+      FROM ${T.CevapBegeniler} 
       WHERE cevap_id = @cevap_id
     `);
 
@@ -183,8 +184,8 @@ export async function getLikedQuestionsByUserId(kullaniciId: number): Promise<an
         s.tarih,
         s.kategori_id,
         sb.tarih AS begeni_tarihi
-      FROM Sosyal.SoruBegeniler sb
-      INNER JOIN Forum.Sorular s ON sb.soru_id = s.soru_id
+      FROM ${T.SoruBegeniler} sb
+      INNER JOIN ${T.Sorular} s ON sb.soru_id = s.soru_id
       WHERE sb.kullanici_id = @kullanici_id
       ORDER BY sb.tarih DESC
     `);
@@ -215,8 +216,8 @@ export async function getLikedAnswersByUserId(kullaniciId: number): Promise<any[
         c.tarih,
         c.soru_id,
         cb.tarih AS begeni_tarihi
-      FROM Sosyal.CevapBegeniler cb
-      INNER JOIN Forum.Cevaplar c ON cb.cevap_id = c.cevap_id
+      FROM ${T.CevapBegeniler} cb
+      INNER JOIN ${T.Cevaplar} c ON cb.cevap_id = c.cevap_id
       WHERE cb.kullanici_id = @kullanici_id
       ORDER BY cb.tarih DESC
     `);

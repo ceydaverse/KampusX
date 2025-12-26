@@ -1,4 +1,5 @@
 import { getPool, sql } from '../db';
+import { T } from '../constants/tables';
 
 /**
  * Soruyu kaydet
@@ -13,7 +14,7 @@ export async function saveQuestion(soruId: number, kullaniciId: number): Promise
     .input('kullanici_id', sql.Int, kullaniciId)
     .query(`
       SELECT kayit_id
-      FROM dbo.SoruKaydetme
+      FROM ${T.SoruKaydetme}
       WHERE soru_id = @soru_id AND kullanici_id = @kullanici_id
     `);
 
@@ -70,9 +71,9 @@ export async function getSavedQuestions(kullaniciId: number): Promise<any[]> {
         k.soyad,
         k.universite,
         k.bolum
-      FROM dbo.SoruKaydetme sk
-      INNER JOIN Forum.Sorular s ON sk.soru_id = s.soru_id
-      LEFT JOIN dbo.Kullanicilar k ON s.kullanici_id = k.kullanici_id
+      FROM ${T.SoruKaydetme} sk
+      INNER JOIN ${T.Sorular} s ON sk.soru_id = s.soru_id
+      LEFT JOIN ${T.Kullanicilar} k ON s.kullanici_id = k.kullanici_id
       WHERE sk.kullanici_id = @kullanici_id
       ORDER BY sk.kayit_id DESC
     `);

@@ -1,4 +1,5 @@
 import { getPool, sql } from '../db';
+import { T } from '../constants/tables';
 
 export interface Group {
   grup_id: number;
@@ -41,18 +42,18 @@ export async function getGroupsByUserId(userId: number): Promise<Group[]> {
         lm.mesaj AS lastMessageText,
         lm.tarih AS lastMessageAt,
         ISNULL(uc.unreadCount, 0) AS unreadCount
-      FROM dbo.Gruplar g
-      INNER JOIN dbo.Grup_Uyeler gu ON gu.grup_id = g.grup_id
+      FROM ${T.Gruplar} g
+      INNER JOIN ${T.GrupUyeler} gu ON gu.grup_id = g.grup_id
       OUTER APPLY (
         SELECT TOP 1 gm.mesaj, gm.tarih
-        FROM dbo.Grup_Mesajlar gm
+        FROM ${T.GrupMesajlar} gm
         WHERE gm.grup_id = g.grup_id
         ORDER BY gm.tarih DESC
       ) lm
       OUTER APPLY (
         SELECT COUNT(*) AS unreadCount
-        FROM dbo.Grup_Mesaj_Okunma gmo
-        INNER JOIN dbo.Grup_Mesajlar gm2 ON gm2.mesaj_id = gmo.mesaj_id
+        FROM ${T.GrupMesajOkunma} gmo
+        INNER JOIN ${T.GrupMesajlar} gm2 ON gm2.mesaj_id = gmo.mesaj_id
         WHERE gm2.grup_id = g.grup_id
           AND gmo.kullanici_id = @userId
           AND gmo.okundu = 0
@@ -91,7 +92,7 @@ export async function getGroupMessages(
       gonderen_id,
       mesaj,
       tarih
-    FROM dbo.Grup_Mesajlar
+    FROM ${T.GrupMesajlar}
     WHERE grup_id = @grup_id
   `;
 
@@ -138,7 +139,7 @@ export async function createGroupMessage(
     .input('gonderen_id', sql.Int, gonderenId)
     .input('mesaj', sql.NVarChar(sql.MAX), mesaj)
     .query(`
-      INSERT INTO dbo.Grup_Mesajlar (grup_id, gonderen_id, mesaj, tarih)
+      INSERT INTO ${T.GrupMesajlar} (grup_id, gonderen_id, mesaj, tarih)
       OUTPUT INSERTED.mesaj_id, INSERTED.grup_id, INSERTED.gonderen_id, INSERTED.mesaj, INSERTED.tarih
       VALUES (@grup_id, @gonderen_id, @mesaj, GETDATE())
     `);
@@ -151,7 +152,7 @@ export async function createGroupMessage(
     .input('grup_id', sql.Int, grupId)
     .query(`
       SELECT kullanici_id
-      FROM dbo.Grup_Uyeler
+      FROM ${T.GrupUyeler}
       WHERE grup_id = @grup_id
     `);
 
@@ -167,7 +168,7 @@ export async function createGroupMessage(
       .input('kullanici_id', sql.Int, member.kullanici_id)
       .input('okundu', sql.Bit, okundu)
       .query(`
-        INSERT INTO dbo.Grup_Mesaj_Okunma (mesaj_id, kullanici_id, okundu)
+        INSERT INTO ${T.GrupMesajOkunma} (mesaj_id, kullanici_id, okundu)
         VALUES (@mesaj_id, @kullanici_id, @okundu)
       `);
   }
@@ -196,8 +197,8 @@ export async function getGroupMembers(grupId: number): Promise<GroupMember[]> {
         gu.rol,
         k.ad,
         k.soyad
-      FROM dbo.Grup_Uyeler gu
-      LEFT JOIN dbo.Kullanicilar k ON gu.kullanici_id = k.kullanici_id
+      FROM ${T.GrupUyeler} gu
+      LEFT JOIN ${T.Kullanicilar} k ON gu.kullanici_id = k.kullanici_id
       WHERE gu.grup_id = @grup_id
       ORDER BY gu.rol DESC, k.ad ASC
     `);
@@ -226,12 +227,12 @@ export async function markMessagesAsRead(
     .input('kullanici_id', sql.Int, kullaniciId)
     .input('last_mesaj_id', sql.Int, lastMesajId)
     .query(`
-      UPDATE dbo.Grup_Mesaj_Okunma
+      UPDATE ${T.GrupMesajOkunma}
       SET okundu = 1
       WHERE kullanici_id = @kullanici_id
         AND mesaj_id IN (
           SELECT mesaj_id
-          FROM dbo.Grup_Mesajlar
+          FROM ${T.GrupMesajlar}
       WHERE grup_id = @grup_id
         AND mesaj_id <= @last_mesaj_id
       )
@@ -278,7 +279,7 @@ export async function createGroup(input: CreateGroupInput): Promise<{ grup_id: n
     const createGroupResult = await createGroupRequest
       .input('grup_adi', sql.NVarChar(200), input.grup_adi.trim())
       .query(`
-        INSERT INTO dbo.Gruplar (grup_adi)
+        INSERT INTO ${T.Gruplar} (grup_adi)
         OUTPUT INSERTED.grup_id, INSERTED.grup_adi
         VALUES (@grup_adi)
       `);
@@ -297,7 +298,7 @@ export async function createGroup(input: CreateGroupInput): Promise<{ grup_id: n
       .input('kullanici_id', sql.Int, input.creator_id)
       .input('rol', sql.NVarChar(50), 'admin')
       .query(`
-        INSERT INTO dbo.Grup_Uyeler (grup_id, kullanici_id, rol)
+        INSERT INTO ${T.GrupUyeler} (grup_id, kullanici_id, rol)
         VALUES (@grup_id, @kullanici_id, @rol)
       `);
 
@@ -314,7 +315,7 @@ export async function createGroup(input: CreateGroupInput): Promise<{ grup_id: n
             .input('kullanici_id', sql.Int, memberId)
             .input('rol', sql.NVarChar(50), 'uye')
             .query(`
-              INSERT INTO dbo.Grup_Uyeler (grup_id, kullanici_id, rol)
+              INSERT INTO ${T.GrupUyeler} (grup_id, kullanici_id, rol)
               VALUES (@grup_id, @kullanici_id, @rol)
             `);
           console.log(`✅ createGroup service - Member ${memberId} added`);

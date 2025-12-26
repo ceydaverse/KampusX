@@ -1,4 +1,5 @@
 import { getPool, sql } from '../db';
+import { T } from '../constants/tables';
 
 // SQL tarafında kategori adını slug'a çevirmek için kullanılan normalizasyon ifadesi
 const NORMALIZED_CATEGORY_NAME_SQL_ACCENTS = `
@@ -74,7 +75,7 @@ async function findCategoryIdBySlug(slug: string): Promise<number> {
 
   const query = `
     SELECT TOP 1 kategori_id
-    FROM Forum.Kategoriler
+    FROM ${T.Kategoriler}
     WHERE ${NORMALIZED_CATEGORY_NAME_SQL} = @slug
   `;
 
@@ -123,7 +124,7 @@ export async function getQuestionsByCategoryId(
     request.input('current_user_id', sql.Int, currentUserId);
     query += `,
       CASE 
-        WHEN EXISTS(SELECT 1 FROM Sosyal.SoruBegeniler WHERE soru_id = s.soru_id AND kullanici_id = @current_user_id) 
+        WHEN EXISTS(SELECT 1 FROM ${T.SoruBegeniler} WHERE soru_id = s.soru_id AND kullanici_id = @current_user_id) 
         THEN 1 
         ELSE 0 
       END AS isLikedByMe
@@ -133,9 +134,9 @@ export async function getQuestionsByCategoryId(
   }
 
   query += `
-    FROM Forum.Sorular s
-    LEFT JOIN (SELECT soru_id, COUNT(*) AS likeCount FROM Sosyal.SoruBegeniler GROUP BY soru_id) sb ON s.soru_id = sb.soru_id
-    LEFT JOIN dbo.Kullanicilar k ON s.kullanici_id = k.kullanici_id
+    FROM ${T.Sorular} s
+    LEFT JOIN (SELECT soru_id, COUNT(*) AS likeCount FROM ${T.SoruBegeniler} GROUP BY soru_id) sb ON s.soru_id = sb.soru_id
+    LEFT JOIN ${T.Kullanicilar} k ON s.kullanici_id = k.kullanici_id
     WHERE s.kategori_id = @kategori_id
     GROUP BY 
       s.soru_id,
@@ -227,7 +228,7 @@ export async function getQuestionById(
     request.input('current_user_id', sql.Int, currentUserId);
     query += `,
       CASE 
-        WHEN EXISTS(SELECT 1 FROM Sosyal.SoruBegeniler WHERE soru_id = s.soru_id AND kullanici_id = @current_user_id) 
+        WHEN EXISTS(SELECT 1 FROM ${T.SoruBegeniler} WHERE soru_id = s.soru_id AND kullanici_id = @current_user_id) 
         THEN 1 
         ELSE 0 
       END AS isLikedByMe
@@ -237,9 +238,9 @@ export async function getQuestionById(
   }
 
   query += `
-    FROM Forum.Sorular s
-    LEFT JOIN (SELECT soru_id, COUNT(*) AS likeCount FROM Sosyal.SoruBegeniler GROUP BY soru_id) sb ON s.soru_id = sb.soru_id
-    LEFT JOIN dbo.Kullanicilar k ON s.kullanici_id = k.kullanici_id
+    FROM ${T.Sorular} s
+    LEFT JOIN (SELECT soru_id, COUNT(*) AS likeCount FROM ${T.SoruBegeniler} GROUP BY soru_id) sb ON s.soru_id = sb.soru_id
+    LEFT JOIN ${T.Kullanicilar} k ON s.kullanici_id = k.kullanici_id
     WHERE s.soru_id = @soru_id
     GROUP BY 
       s.soru_id,
@@ -307,7 +308,7 @@ export async function validateCategoryExists(kategoriId: number): Promise<boolea
   const result = await pool
     .request()
     .input('kategori_id', sql.Int, kategoriId)
-    .query(`SELECT 1 FROM Forum.Kategoriler WHERE kategori_id = @kategori_id`);
+    .query(`SELECT 1 FROM ${T.Kategoriler} WHERE kategori_id = @kategori_id`);
 
   return result.recordset.length > 0;
 }
@@ -318,7 +319,7 @@ export async function validateUserExists(kullaniciId: number): Promise<boolean> 
   const result = await pool
     .request()
     .input('kullanici_id', sql.Int, kullaniciId)
-    .query(`SELECT 1 FROM dbo.Kullanicilar WHERE kullanici_id = @kullanici_id`);
+    .query(`SELECT 1 FROM ${T.Kullanicilar} WHERE kullanici_id = @kullanici_id`);
 
   return result.recordset.length > 0;
 }
@@ -360,12 +361,12 @@ export async function createQuestion(input: CreateQuestionInput): Promise<Questi
   // Etiketler kolonu varsa INSERT'e ekle, yoksa sadece mevcut kolonları kullan
   const insertQuery = etiketlerJson
     ? `
-      INSERT INTO Forum.Sorular (kullanici_id, kategori_id, baslik, soru_metin, etiketler, tarih)
+      INSERT INTO ${T.Sorular} (kullanici_id, kategori_id, baslik, soru_metin, etiketler, tarih)
       OUTPUT INSERTED.soru_id, INSERTED.kategori_id, INSERTED.kullanici_id, INSERTED.baslik, INSERTED.soru_metin, INSERTED.tarih
       VALUES (@kullanici_id, @kategori_id, @baslik, @soru_metin, @etiketler, GETDATE())
     `
     : `
-      INSERT INTO Forum.Sorular (kullanici_id, kategori_id, baslik, soru_metin, tarih)
+      INSERT INTO ${T.Sorular} (kullanici_id, kategori_id, baslik, soru_metin, tarih)
       OUTPUT INSERTED.soru_id, INSERTED.kategori_id, INSERTED.kullanici_id, INSERTED.baslik, INSERTED.soru_metin, INSERTED.tarih
       VALUES (@kullanici_id, @kategori_id, @baslik, @soru_metin, GETDATE())
     `;
@@ -396,7 +397,7 @@ export async function deleteQuestion(
     .input('kullanici_id', sql.Int, kullaniciId)
     .query(`
       SELECT kullanici_id 
-      FROM Forum.Sorular 
+      FROM ${T.Sorular} 
       WHERE soru_id = @soru_id
     `);
 
@@ -413,7 +414,7 @@ export async function deleteQuestion(
     .request()
     .input('soru_id', sql.Int, soruId)
     .query(`
-      DELETE FROM Forum.Sorular 
+      DELETE FROM ${T.Sorular} 
       WHERE soru_id = @soru_id
     `);
 }

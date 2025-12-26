@@ -1,4 +1,5 @@
 import { getPool, sql } from '../db';
+import { T } from '../constants/tables';
 import { createNotification, getQuestionOwnerId, getUserDisplayName } from './notifications.service';
 
 export interface AnswerAuthor {
@@ -61,7 +62,7 @@ export async function getAnswersByQuestionId(
     request.input('current_user_id', sql.Int, currentUserId);
     query += `,
       CASE 
-        WHEN EXISTS(SELECT 1 FROM Sosyal.CevapBegeniler WHERE cevap_id = c.cevap_id AND kullanici_id = @current_user_id) 
+        WHEN EXISTS(SELECT 1 FROM ${T.CevapBegeniler} WHERE cevap_id = c.cevap_id AND kullanici_id = @current_user_id) 
         THEN 1 
         ELSE 0 
       END AS isLikedByMe
@@ -71,9 +72,9 @@ export async function getAnswersByQuestionId(
   }
 
   query += `
-    FROM Forum.Cevaplar c
-    LEFT JOIN (SELECT cevap_id, COUNT(*) AS likeCount FROM Sosyal.CevapBegeniler GROUP BY cevap_id) cb ON c.cevap_id = cb.cevap_id
-    LEFT JOIN dbo.Kullanicilar k ON c.kullanici_id = k.kullanici_id
+    FROM ${T.Cevaplar} c
+    LEFT JOIN (SELECT cevap_id, COUNT(*) AS likeCount FROM ${T.CevapBegeniler} GROUP BY cevap_id) cb ON c.cevap_id = cb.cevap_id
+    LEFT JOIN ${T.Kullanicilar} k ON c.kullanici_id = k.kullanici_id
     WHERE c.soru_id = @soru_id
     GROUP BY 
       c.cevap_id,
@@ -133,7 +134,7 @@ export async function createAnswer(input: CreateAnswerInput): Promise<Answer> {
   const questionCheck = await pool
     .request()
     .input('soru_id', sql.Int, input.soru_id)
-    .query('SELECT 1 FROM Forum.Sorular WHERE soru_id = @soru_id');
+    .query(`SELECT 1 FROM ${T.Sorular} WHERE soru_id = @soru_id`);
 
   if (questionCheck.recordset.length === 0) {
     throw new Error('Soru bulunamadı');
@@ -145,7 +146,7 @@ export async function createAnswer(input: CreateAnswerInput): Promise<Answer> {
     .input('kullanici_id', sql.Int, input.kullanici_id)
     .input('cevap_metin', sql.NVarChar(sql.MAX), input.cevap_metin)
     .query(`
-      INSERT INTO Forum.Cevaplar (soru_id, kullanici_id, cevap_metin, tarih)
+      INSERT INTO ${T.Cevaplar} (soru_id, kullanici_id, cevap_metin, tarih)
       OUTPUT INSERTED.cevap_id, INSERTED.soru_id, INSERTED.kullanici_id, 
              INSERTED.cevap_metin, INSERTED.tarih
       VALUES (@soru_id, @kullanici_id, @cevap_metin, GETDATE())

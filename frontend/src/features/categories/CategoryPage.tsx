@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../features/auth/AuthProvider";
 import Header from "../../MainLayout/components/Header/Header";
-import { launchFireworks } from "../../shared/utils/fireworks";
 import { Toast } from "../../shared/components/Toast/Toast";
 import styles from "./CategoryPage.module.css";
 import questionStyles from "../questions/questions.module.css";
@@ -89,21 +88,14 @@ export default function CategoryPage() {
   // Slug'dan ana_kategori_id bul
   const anaKategoriId = ANA_KATEGORI_ID_BY_SLUG[kategoriSlug] || null;
 
-  // Konfeti animasyonu - sadece Eğlence kategorisinde
-  useEffect(() => {
-    if (kategoriSlug === "eglence") {
-      launchFireworks();
-    }
-  }, [kategoriSlug]);
-
-
-
   // Slug'a göre tema class'ı seç
   const themeClass =
     PAGE_THEME_CLASS[kategoriSlug] ?? styles.pageThemeDersAkademi;
 
   // Alt kategorileri yükle (ana_kategori_id ile)
   useEffect(() => {
+    let cancelled = false;
+    
     const loadAltCategories = async () => {
       if (!anaKategoriId) {
         setCategoryError("Ana kategori bulunamadı");
@@ -117,11 +109,38 @@ export default function CategoryPage() {
       setCategoryError(null);
       try {
         const items = await fetchCategories(anaKategoriId);
-        setAltCategories(items);
+        
+        // Component unmount olduysa state güncelleme
+        if (cancelled) return;
+        
+        // Duplicate kategorileri temizle (kategori_adi'ye göre unique, case-insensitive + trim)
+        const seenNormalizedNames = new Set<string>();
+        const seenIds = new Set<number>();
+        const uniqueItems: Category[] = [];
+        
+        items.forEach(c => {
+          const normalizedName = (c.kategori_adi || "").trim().toLocaleLowerCase("tr-TR");
+          
+          // kategori_adi varsa normalize edilmiş isme göre kontrol et
+          if (normalizedName) {
+            if (!seenNormalizedNames.has(normalizedName)) {
+              seenNormalizedNames.add(normalizedName);
+              uniqueItems.push(c);
+            }
+          } 
+          // kategori_adi yoksa veya boşsa kategori_id'ye göre kontrol et (fallback)
+          else if (c.kategori_id && !seenIds.has(c.kategori_id)) {
+            seenIds.add(c.kategori_id);
+            uniqueItems.push(c);
+          }
+        });
+        
+        // State'i direkt overwrite et (append etme)
+        setAltCategories(uniqueItems);
         
         // İlk alt kategoriyi otomatik seç (sadece yeni yüklemede)
-        if (items.length > 0) {
-          const firstCategory = items[0];
+        if (uniqueItems.length > 0) {
+          const firstCategory = uniqueItems[0];
           setSelectedAltCategoryId(firstCategory.kategori_id);
           setKategoriId(firstCategory.kategori_id);
         } else {
@@ -130,6 +149,7 @@ export default function CategoryPage() {
           setSelectedAltCategoryId(null);
         }
       } catch (err: any) {
+        if (cancelled) return;
         const msg =
           err?.response?.data?.message || "Kategoriler yüklenirken bir hata oluştu.";
         setCategoryError(msg);
@@ -137,12 +157,19 @@ export default function CategoryPage() {
         setKategoriId(null);
         setSelectedAltCategoryId(null);
       } finally {
-        setLoadingCategories(false);
+        if (!cancelled) {
+          setLoadingCategories(false);
+        }
       }
     };
     
     loadAltCategories();
-  }, [anaKategoriId, kategoriSlug]);
+    
+    // Cleanup: component unmount veya dependency değiştiğinde önceki isteği iptal et
+    return () => {
+      cancelled = true;
+    };
+  }, [anaKategoriId]);
 
   // selectedAltCategoryId değiştiğinde kategoriId'yi güncelle
   useEffect(() => {
@@ -150,6 +177,33 @@ export default function CategoryPage() {
       setKategoriId(selectedAltCategoryId);
     }
   }, [selectedAltCategoryId]);
+
+  // UI render için unique kategoriler (extra güvenlik)
+  // kategori_adi'ye göre unique yap (case-insensitive + trim, her kategori sadece 1 kez görünsün)
+  const uniqueCategories = useMemo(() => {
+    const seenNormalizedNames = new Set<string>();
+    const seenIds = new Set<number>();
+    const result: Category[] = [];
+    
+    (altCategories ?? []).forEach(c => {
+      const normalizedName = (c.kategori_adi || "").trim().toLocaleLowerCase("tr-TR");
+      
+      // kategori_adi varsa normalize edilmiş isme göre kontrol et
+      if (normalizedName) {
+        if (!seenNormalizedNames.has(normalizedName)) {
+          seenNormalizedNames.add(normalizedName);
+          result.push(c);
+        }
+      } 
+      // kategori_adi yoksa veya boşsa kategori_id'ye göre kontrol et (fallback)
+      else if (c.kategori_id && !seenIds.has(c.kategori_id)) {
+        seenIds.add(c.kategori_id);
+        result.push(c);
+      }
+    });
+    
+    return result;
+  }, [altCategories]);
 
   // Soruları yükle (kategori_id bulunduğunda)
   const loadQuestions = useCallback(async () => {
@@ -267,22 +321,25 @@ export default function CategoryPage() {
 
       <main className={styles.content}>
         {/* Üstte alt kategori butonları - sadece template gösteriliyorsa */}
-        {!shouldHideTemplate && altCategories.length > 0 && (
+        {!shouldHideTemplate && uniqueCategories.length > 0 && (
           <div className={styles.filterChips}>
-            {altCategories.map((category) => (
-              <button
-                key={category.kategori_id}
-                className={`${styles.filterChip} ${
-                  category.kategori_id === selectedAltCategoryId ? styles.filterChipActive : ""
-                } ${styles.chipHoverGlow}`}
-                onClick={() => {
-                  setSelectedAltCategoryId(category.kategori_id);
-                  setKategoriId(category.kategori_id);
-                }}
-              >
-                {category.kategori_adi}
-              </button>
-            ))}
+            {uniqueCategories.map((category) => {
+              const normalizedKey = (category.kategori_adi || "").trim().toLocaleLowerCase("tr-TR") || `category-${category.kategori_id}`;
+              return (
+                <button
+                  key={normalizedKey}
+                  className={`${styles.filterChip} ${
+                    category.kategori_id === selectedAltCategoryId ? styles.filterChipActive : ""
+                  } ${styles.chipHoverGlow}`}
+                  onClick={() => {
+                    setSelectedAltCategoryId(category.kategori_id);
+                    setKategoriId(category.kategori_id);
+                  }}
+                >
+                  {category.kategori_adi}
+                </button>
+              );
+            })}
           </div>
         )}
         
@@ -382,7 +439,7 @@ export default function CategoryPage() {
         onSubmit={handleCreateQuestion}
         loading={creating}
         error={createError}
-        categories={altCategories}
+        categories={uniqueCategories}
       />
       <Toast
         message={toastMessage || ""}

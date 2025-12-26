@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import api from "../../../lib/api";
 
 interface Bildirim {
   bildirim_id: number;
@@ -13,8 +13,8 @@ const BildirimPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    axios
-      .get("http://localhost:5000/api/bildirimler/1") // 1 yerine gerçek kullanıcı ID
+    api
+      .get("/api/bildirimler/1") // 1 yerine gerçek kullanıcı ID
       .then((res) => {
         setBildirimler(res.data.data);
       })

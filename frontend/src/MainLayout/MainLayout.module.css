@@ -12,7 +12,7 @@
 /* İçerik genişliği */
 .main {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: 1fr;
   gap: 16px;
   padding: 0 16px 40px;
   align-items: stretch;
