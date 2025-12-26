@@ -1,16 +1,6 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 
-/**
- * Socket.IO DM (Direct Message) handlers
- * 
- * Socket auth: Client auth: { token } gönderecek
- * Token doğrulama: Basit userId kontrolü (JWT yoksa localStorage'dan userId alınır)
- */
 
-/**
- * Socket auth middleware
- * Client'tan gelen token'ı doğrula ve socket.data.userId'yi set et
- */
 export function setupSocketAuth(io: SocketIOServer) {
   io.use(async (socket: Socket, next) => {
     try {

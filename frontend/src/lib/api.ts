@@ -1,9 +1,8 @@
 import axios from "axios";
 
-// API base URL - env'den oku, yoksa varsayılan localhost:5001
-// Kesinlikle http:// kullan (https/wss kullanma)
+
 let API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001";
-// wss:// veya https:// varsa http://'ye çevir
+
 if (API_URL.startsWith("wss://") || API_URL.startsWith("https://")) {
   API_URL = API_URL.replace(/^wss?:\/\//, "http://").replace(/^https:\/\//, "http://");
 }
@@ -46,7 +45,7 @@ export function getBackendStatus(): boolean | null {
   return backendStatus;
 }
 
-// Request interceptor: Her istekte x-user-id header'ını ekle
+// Request interceptor
 api.interceptors.request.use(
   (config) => {
     try {

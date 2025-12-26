@@ -252,30 +252,32 @@ export async function getGroupMessages(
   const result = await request.query(query);
 
   // Mesajları map'le
-  const messages = result.recordset.map((row: any) => ({
-    messageId: row.mesaj_id,
-    groupId: row.grup_id,
-    senderId: row.gonderen_kullanici,
-    text: row.mesaj || '', // mesaj kolonu boş olamaz ama güvenlik için
-    sentAt: new Date(row.gonderim_tarihi).toISOString(),
-    // Ek bilgiler (opsiyonel)
-    senderUsername: row.gonderen_kullanici_adi || null,
-    readCount: Number(row.okuyan_sayisi) || 0,
-    isReadByMe: row.benim_okudum === 1 || row.benim_okudum === true,
-  }));
+  const messages: GroupMessage[] = result.recordset.map((row: any) => ({
+  mesaj_id: Number(row.mesaj_id),
+  grup_id: Number(row.grup_id),
+  gonderen_id: Number(row.gonderen_kullanici),
+  mesaj: String(row.mesaj || ''),
+  tarih: new Date(row.gonderim_tarihi),
+
+  // opsiyoneller (interface’te var)
+  gonderen_kullanici_adi: row.gonderen_kullanici_adi ?? null,
+  okuyan_sayisi: Number(row.okuyan_sayisi) || 0,
+  benim_okudum: row.benim_okudum === 1 || row.benim_okudum === true,
+}));
 
   // Mesajları çektikten sonra, kullanıcı için okundu kayıtlarını ekle
   // Eğer kullanıcı mesajı daha önce okumadıysa ve gönderen kendisi değilse
   if (currentUserId && messages.length > 0) {
     try {
-      await markMessagesAsReadAfterFetch(grupId, currentUserId, messages.map(m => m.messageId));
+      await markMessagesAsReadAfterFetch(grupId, currentUserId, messages.map(m => m.mesaj_id));
+
     } catch (err: any) {
       // Okundu kaydı hatası mesaj listesini engellemez, sadece logla
       console.error('[getGroupMessages] Okundu kaydı eklenirken hata:', err?.message);
     }
   }
 
-  return messages;
+ return messages;
 }
 
 /**
